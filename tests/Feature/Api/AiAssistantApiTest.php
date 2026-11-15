@@ -4,7 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\Task;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
 use Tests\Concerns\CreatesTenants;
 use Tests\TestCase;
@@ -13,35 +13,9 @@ class AiAssistantApiTest extends TestCase
 {
     use CreatesTenants, RefreshDatabase;
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        config([
-            'services.yobel_ai.ollama_url' => 'http://ollama.test',
-            'services.yobel_ai.model' => 'test-model',
-        ]);
-    }
-
     public function test_member_can_ask_yobel_with_an_authorized_project_context(): void
     {
-        Http::fake([
-            'http://ollama.test/api/chat' => Http::response([
-                'model' => 'test-model',
-                'message' => ['content' => json_encode([
-                    'answer' => 'Voici un résumé du projet.',
-                    'suggestions' => [[
-                        'type' => 'task',
-                        'title' => 'Vérifier le plan de lancement',
-                        'content' => 'Confirmer les responsables des tâches.',
-                        'payload' => ['priority' => 'high'],
-                    ]],
-                ], JSON_UNESCAPED_UNICODE)],
-                'prompt_eval_count' => 12,
-                'eval_count' => 8,
-            ]),
-        ]);
-
+        $this->fakeGemini('Projet confidentiel : 1 tâche ouverte.');
         $project = $this->makeProject(['name' => 'Projet confidentiel']);
         $member = $this->makeUser('member');
         $this->addMember($project, $member, 'reader');
@@ -57,52 +31,34 @@ class AiAssistantApiTest extends TestCase
             'prompt' => 'Résume les prochaines étapes.',
             'project_id' => $project->id,
         ])->assertCreated()
-            ->assertJsonPath('response', 'Voici un résumé du projet.')
-            ->assertJsonPath('provider', 'ollama')
-            ->assertJsonPath('model', 'test-model')
+            ->assertJsonPath('provider', 'gemini')
+            ->assertJsonPath('model', 'gemini-3.6-flash')
             ->assertJsonPath('input_tokens', 12)
-            ->assertJsonPath('output_tokens', 8)
-            ->assertJsonPath('suggestions.0.title', 'Vérifier le plan de lancement');
+            ->assertJsonPath('output_tokens', 20)
+            ->assertJsonPath('suggestions', []);
 
         $interactionId = $response->json('id');
+        $this->assertStringContainsString('1 tâche ouverte', $response->json('response'));
         $this->assertDatabaseHas('ai_interactions', [
             'id' => $interactionId,
             'user_id' => $member->id,
             'project_id' => $project->id,
             'status' => 'completed',
         ]);
-        $this->assertDatabaseHas('ai_suggestions', [
-            'interaction_id' => $interactionId,
-            'project_id' => $project->id,
-            'type' => 'task',
-            'status' => 'pending',
-        ]);
-
-        Http::assertSent(function (ClientRequest $request) {
-            $systemMessage = data_get($request->data(), 'messages.0.content', '');
-
-            return $request->url() === 'http://ollama.test/api/chat'
-                && str_contains($systemMessage, 'Projet confidentiel')
-                && str_contains($systemMessage, 'Préparer le lancement');
-        });
+        $this->assertDatabaseCount('ai_suggestions', 0);
+        Http::assertSent(fn (HttpRequest $request) => str_contains($request->url(), ':generateContent')
+            && str_contains(data_get($request->data(), 'systemInstruction.parts.0.text', ''), 'Projet confidentiel')
+            && data_get($request->data(), 'contents.0.parts.0.text') === 'Résume les prochaines étapes.');
 
         $this->getJson("/api/ai/interactions?project_id={$project->id}")
             ->assertOk()
             ->assertJsonPath('data.0.id', $interactionId);
-
-        $suggestionId = $response->json('suggestions.0.id');
-        $this->postJson("/api/ai/suggestions/{$suggestionId}/review", ['status' => 'accepted'])
-            ->assertOk()
-            ->assertJsonPath('status', 'accepted')
-            ->assertJsonPath('validated_by', $member->id);
 
         $otherUser = $this->makeUser('member');
         $this->actingAsUser($otherUser);
         $this->getJson('/api/ai/interactions')
             ->assertOk()
             ->assertJsonCount(0, 'data');
-        $this->postJson("/api/ai/suggestions/{$suggestionId}/review", ['status' => 'rejected'])
-            ->assertNotFound();
     }
 
     public function test_guest_cannot_use_yobel(): void
@@ -128,21 +84,38 @@ class AiAssistantApiTest extends TestCase
         $this->assertDatabaseCount('ai_interactions', 0);
     }
 
-    public function test_ollama_errors_are_reported_and_saved(): void
+    public function test_yobel_answers_general_questions_through_gemini(): void
     {
-        Http::fake(['http://ollama.test/api/chat' => Http::response(['error' => 'model not found'], 500)]);
+        $this->fakeGemini('Bonjour ! Que souhaitez-vous explorer ?');
         $member = $this->makeUser('member');
         $this->actingAsUser($member);
 
         $response = $this->postJson('/api/ai/ask', ['prompt' => 'Bonjour'])
-            ->assertStatus(503)
-            ->assertJsonPath('message', 'Le moteur Ollama local a refusé la requête.');
+            ->assertCreated()
+            ->assertJsonPath('status', 'completed')
+            ->assertJsonPath('provider', 'gemini')
+            ->assertJsonPath('response', 'Bonjour ! Que souhaitez-vous explorer ?');
 
         $this->assertDatabaseHas('ai_interactions', [
-            'id' => $response->json('interaction_id'),
+            'id' => $response->json('id'),
             'user_id' => $member->id,
-            'status' => 'failed',
+            'status' => 'completed',
         ]);
+        Http::assertSent(fn (HttpRequest $request) => data_get($request->data(), 'contents.0.parts.0.text') === 'Bonjour');
+    }
+
+    public function test_recent_completed_exchange_is_sent_as_conversation_history(): void
+    {
+        $this->fakeGemini('Je comprends, continuons.');
+        $this->actingAsUser($this->makeUser('member'));
+
+        $this->postJson('/api/ai/ask', ['prompt' => 'Je réfléchis à une idée de projet.'])->assertCreated();
+        $this->postJson('/api/ai/ask', ['prompt' => 'Aide-moi à la préciser.'])->assertCreated();
+
+        Http::assertSent(fn (HttpRequest $request) => data_get($request->data(), 'contents.0.parts.0.text') === 'Je réfléchis à une idée de projet.'
+            && data_get($request->data(), 'contents.1.role') === 'model'
+            && data_get($request->data(), 'contents.1.parts.0.text') === 'Je comprends, continuons.'
+            && data_get($request->data(), 'contents.2.parts.0.text') === 'Aide-moi à la préciser.');
     }
 
     public function test_assistant_page_is_limited_to_non_guest_roles(): void
@@ -151,5 +124,30 @@ class AiAssistantApiTest extends TestCase
             ->assertOk()
             ->assertSee('data-page-roles="admin,project_manager,member"', false)
             ->assertSee('Assistant Yobel');
+    }
+
+    private function fakeGemini(string $answer): void
+    {
+        config([
+            'services.yobel_ai.gemini_api_key' => 'test-key',
+            'services.yobel_ai.gemini_model' => 'gemini-3.6-flash',
+        ]);
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                ['text' => json_encode(['answer' => $answer, 'suggestions' => []], JSON_UNESCAPED_UNICODE)],
+                            ],
+                        ],
+                    ],
+                ],
+                'usageMetadata' => [
+                    'promptTokenCount' => 12,
+                    'candidatesTokenCount' => 20,
+                ],
+            ]),
+        ]);
     }
 }

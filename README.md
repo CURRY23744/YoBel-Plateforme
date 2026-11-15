@@ -29,15 +29,21 @@ Les images téléversées sont stockées dans `storage/app/public`. Pour les ren
 php artisan storage:link
 ```
 
-## Assistant Yobel (modèle local)
+## Assistant métier Yobel
 
-L’assistant utilise Ollama en local. Il ne fonctionne que si Ollama est lancé et si le modèle configuré est disponible.
+Yobel utilise l’API Google Gemini pour converser librement en français (ou dans la langue demandée), réfléchir à des idées et répondre aux questions générales. Aucun projet n’est nécessaire pour discuter. Un projet accessible peut être sélectionné afin d’inclure son avancement, ses tâches, jalons, décisions et comptes rendus comme contexte en lecture seule.
 
-1. Installer Ollama et télécharger le modèle, par exemple `ollama pull llama3.2`.
-2. Dans `.env`, configurer `YOBEL_AI_OLLAMA_URL=http://127.0.0.1:11434`, `YOBEL_AI_OLLAMA_MODEL=llama3.2` et éventuellement `YOBEL_AI_TIMEOUT=60`.
-3. Ouvrir la page **Assistant Yobel** ou sélectionner **Demander à Yobel** depuis un projet.
+Pour activer l’assistant, créez une clé Gemini dans [Google AI Studio](https://aistudio.google.com/apikey), puis configurez ces variables comme secrets côté serveur et hébergeur :
 
-Le contexte de projet transmis au modèle local est limité aux projets que l’utilisateur peut consulter. Les échanges sont enregistrés dans `ai_interactions`; les propositions sont conservées dans `ai_suggestions` et nécessitent une validation explicite. Valider une proposition ne déclenche pas automatiquement de modification dans le projet.
+```dotenv
+YOBEL_AI_GEMINI_API_KEY=votre_cle_gemini
+YOBEL_AI_GEMINI_MODEL=gemini-3.6-flash
+YOBEL_AI_TIMEOUT=60
+```
+
+La clé doit rester côté serveur et ne doit jamais être ajoutée au JavaScript, au dépôt Git ou à une réponse de l’application. Après avoir configuré ces variables en production, rechargez la configuration Laravel selon la procédure de déploiement de l’hébergeur.
+
+Les demandes, les dix derniers échanges réussis du même utilisateur et du même contexte, ainsi que les données du projet sélectionné sont transmis à Google Gemini. N’incluez pas d’informations sensibles que vous ne souhaitez pas transmettre à Google et vérifiez ses conditions de confidentialité. L’offre gratuite peut être soumise à des quotas, restrictions et changements de tarification; elle n’est ni illimitée ni garantie. Les appels à Gemini sont effectués depuis le serveur, pas le navigateur. Les échanges sont conservés dans `ai_interactions`. Yobel ne modifie aucune donnée : ses suggestions restent soumises à validation humaine.
 
 ## Learning Laravel
 

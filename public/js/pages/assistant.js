@@ -66,12 +66,16 @@
       const result = await api('ai/interactions', { params });
       const history = (result.data || []).reverse();
       if (!history.length) {
-        messages.innerHTML = '<div class="text-muted text-center py-5" id="assistantWelcome">Bonjour, je suis Yobel. Posez une question sur votre travail ou choisissez un projet pour ajouter son contexte.</div>';
+        messages.innerHTML = '<div class="text-muted text-center py-5" id="assistantWelcome">Bonjour, je suis Yobel. Posez-moi une question, partagez une idée ou demandez un conseil. Vous pouvez choisir un projet si vous souhaitez que je tienne compte de ses données.</div>';
         return;
       }
       history.forEach((item) => {
         appendMessage('user', item.prompt);
-        appendMessage('assistant', item.response || item.error || 'Cette réponse n’a pas pu être générée.', item.status !== 'completed');
+        const oldProvider = { ollama: 'Ollama', anthropic: 'Claude' }[item.provider];
+        const response = item.status !== 'completed' && oldProvider
+          ? `Cet échange date de l’ancienne intégration ${oldProvider}.`
+          : item.response || item.error || 'Cette réponse n’a pas pu être générée.';
+        appendMessage('assistant', response, item.status !== 'completed');
         renderSuggestions(item.suggestions);
       });
     } catch (error) {
@@ -126,7 +130,7 @@
       renderSuggestions(result.suggestions);
     } catch (requestError) {
       waiting.remove();
-      const message = requestError.message || 'Le modèle local est indisponible. Vérifiez Ollama et le modèle configuré.';
+      const message = requestError.message || 'Impossible de traiter votre demande. Réessayez.';
       appendMessage('assistant', message, true);
       error.textContent = message;
       error.classList.remove('d-none');

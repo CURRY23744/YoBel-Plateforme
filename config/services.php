@@ -32,8 +32,8 @@ return [
     ],
 
     'yobel_ai' => [
-        'ollama_url' => env('YOBEL_AI_OLLAMA_URL', 'http://127.0.0.1:11434'),
-        'model' => env('YOBEL_AI_OLLAMA_MODEL', 'llama3.2'),
+        'gemini_api_key' => env('YOBEL_AI_GEMINI_API_KEY'),
+        'gemini_model' => env('YOBEL_AI_GEMINI_MODEL', 'gemini-3.6-flash'),
         'timeout' => env('YOBEL_AI_TIMEOUT', 60),
     ],
 

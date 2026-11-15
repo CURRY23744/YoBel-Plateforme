@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const { $, api, esc, L, fmtDate, fmtDateTime, ago, fullName, fail, ready } = App;
+  const { $, api, esc, L, fmtDate, fmtDateTime, ago, fullName, fail, ready, activitySubject, activityAction } = App;
   let charts = [];
 
   function renderKpis(data, stats) {
@@ -86,7 +86,7 @@
     if (user.role === 'admin') {
       $('#adminRow').classList.remove('d-none');
       renderList('activity', data.recent_activity || [], (entry) => `<div class="list-line">
-        <i class="bi bi-clock-history text-muted"></i><div class="flex-grow-1 min-w-0"><div class="fw-semibold text-truncate">${esc(entry.user?.name || 'Système')} · ${esc(entry.action)}</div><div class="small text-muted text-truncate">${esc(entry.description || '')}</div></div><span class="small text-muted">${esc(ago(entry.created_at))}</span>
+        <i class="bi bi-clock-history text-muted"></i><div class="flex-grow-1 min-w-0"><div class="fw-semibold text-truncate">${esc(entry.user?.name || 'Système')} · ${esc(activityAction(entry.action, true))}</div><div class="small text-muted text-truncate">${esc(activitySubject(entry))}</div></div><span class="small text-muted">${esc(ago(entry.created_at))}</span>
       </div>`, 'Aucune activité récente.', 'bi-clock-history');
       renderList('latestUsers', data.latest_users || [], (person) => `<div class="list-line">
         ${App.avatar(person, 'sm')}<div class="flex-grow-1"><div class="fw-semibold">${esc(fullName(person))}</div><div class="small text-muted">${esc(L.role[person.role] || person.role)}</div></div>

@@ -369,8 +369,32 @@
   const cache = {};
   const cached = (key, loader) => (cache[key] ||= loader());
 
+  const activitySubjects = {
+    ActivityLog: 'Activité',
+    Decision: 'Décision',
+    Event: 'Événement',
+    MeetingMinute: 'Compte rendu',
+    Milestone: 'Jalon',
+    Project: 'Projet',
+    ProjectMember: 'Membre du projet',
+    ProjectType: 'Type de projet',
+    Task: 'Tâche',
+    User: 'Utilisateur',
+  };
+  const activitySubject = (log) => {
+    const type = log?.subject_type ? log.subject_type.split('\\').pop() : '';
+    const label = activitySubjects[type] || type.replace(/([a-z])([A-Z])/g, '$1 $2');
+    return label || 'Élément';
+  };
+  const activityAction = (action, past = false) => ({
+    created: past ? 'a créé' : 'Création',
+    updated: past ? 'a modifié' : 'Modification',
+    deleted: past ? 'a supprimé' : 'Suppression',
+  }[action] || action || 'Activité');
+
   window.App = {
     L, opts, esc, qs, $, $$, debounce, uid, fmtDate, fmtDateTime, toLocalInput, naive, ago, money, fmtSize, isOverdue, fileIcon, richText,
+    activitySubject, activityAction,
     badge, statusBadge, priorityBadge, taskBadge, decisionBadge, rightsBadges, fullName, avatar, empty, spinner,
     token, user, setSession, clearSession, go, toast, fail, api, download, preview, modal, formModal, confirm: confirmBox,
     field, fields, formData, showErrors, clearErrors, onFormSubmit, pager, loadNotifications, notifHtml, notifTarget, ready, logout, cached,

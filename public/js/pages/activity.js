@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const { $, api, esc, fullName, fmtDateTime, pager, download, fail, debounce, ready } = App;
+  const { $, api, esc, fullName, fmtDateTime, pager, download, fail, debounce, ready, activitySubject, activityAction } = App;
   const rows = $('#activityRows');
   let page = 1;
 
@@ -20,14 +20,13 @@
   function renderLogs(result) {
     const logs = result.data || [];
     rows.innerHTML = logs.length ? logs.map((log) => {
-      const subject = log.subject_type ? log.subject_type.split('\\').pop() : '';
       return `<tr>
         <td class="text-nowrap">${esc(fmtDateTime(log.created_at))}</td>
         <td>${esc(fullName(log.user))}</td>
         <td>${log.project ? `<a href="/projects/${encodeURIComponent(log.project.id)}">${esc(log.project.reference || log.project.name)}</a>` : '—'}</td>
-        <td><span class="badge-soft bs-idea">${esc(log.action || '—')}</span></td>
-        <td>${esc(subject ? `${subject}${log.subject_id ? ` #${log.subject_id}` : ''}` : '—')}</td>
-        <td>${esc(log.description || '—')}</td>
+        <td><span class="badge-soft bs-idea">${esc(activityAction(log.action))}</span></td>
+        <td>${esc(activitySubject(log))}</td>
+        <td>${esc(`${activitySubject(log)} · ${activityAction(log.action).toLocaleLowerCase('fr-FR')}`)}</td>
       </tr>`;
     }).join('') : '<tr><td colspan="6" class="text-center text-muted py-5"><i class="bi bi-clock-history fs-3 d-block mb-2"></i>Aucune activité pour ces filtres.</td></tr>';
     pager($('#activityPager'), result, (nextPage) => { page = nextPage; loadActivity(); });
