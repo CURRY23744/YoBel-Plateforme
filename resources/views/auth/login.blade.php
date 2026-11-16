@@ -5,9 +5,14 @@
 @section('page', 'login')
 
 @section('content')
-    <h1 class="h4 text-center mb-1">Bienvenue</h1>
+    <div class="login-eyebrow">
+        <i class="bi bi-shield-lock" aria-hidden="true"></i>
+        Espace de travail sécurisé
+    </div>
 
-    <p class="text-muted text-center mb-4">
+    <h1 class="h4 mb-2">Bienvenue dans votre espace</h1>
+
+    <p class="text-muted login-description">
         Connectez-vous à votre espace de travail.
     </p>
 
@@ -20,8 +25,8 @@
                 Adresse e-mail
             </label>
 
-            <div class="input-group">
-                <span class="input-group-text">
+            <div class="input-group login-input">
+                <span class="input-group-text" aria-hidden="true">
                     <i class="bi bi-envelope"></i>
                 </span>
 
@@ -44,8 +49,8 @@
                 Mot de passe
             </label>
 
-            <div class="input-group password-group">
-                <span class="input-group-text">
+            <div class="input-group password-group login-input">
+                <span class="input-group-text" aria-hidden="true">
                     <i class="bi bi-lock"></i>
                 </span>
 
@@ -83,11 +88,12 @@
             class="btn btn-primary w-100 py-2"
         >
             Se connecter
+            <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
         </button>
     </form>
 
-    <p class="text-center text-muted small mt-4 mb-0">
-        Accès réservé aux membres de l'entreprise.<br>
-        Votre compte est créé par un administrateur.
-    </p>
+    <div class="login-note">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+        <p class="mb-0">Accès réservé aux membres de l’entreprise. Votre compte est créé par un administrateur.</p>
+    </div>
 @endsection

@@ -56,23 +56,47 @@
 >
 
     <div class="guest-wrap">
+        <div class="auth-layout @if(View::yieldContent('page') === 'login') auth-layout-login @endif">
+            @if(View::yieldContent('page') === 'login')
+                <aside class="login-showcase" aria-label="Présentation de YOBEL Workspace">
+                    <a class="login-showcase-brand" href="/login" aria-label="YOBEL Workspace">
+                        <img src="{{ asset('images/logo-white.png') }}" alt="YOBEL">
+                    </a>
 
-        <div class="card auth-card">
+                    <div class="login-showcase-copy">
+                        <span class="login-showcase-kicker">VOTRE ESPACE DE TRAVAIL</span>
+                        <h2>Faites avancer vos projets, ensemble.</h2>
+                        <p>Un espace unique pour organiser le travail et garder votre équipe alignée.</p>
 
-            <div class="card-body p-4 p-sm-5">
+                        <ul class="login-showcase-features">
+                            <li><i class="bi bi-kanban" aria-hidden="true"></i><span>Projets et tâches au même endroit</span></li>
+                            <li><i class="bi bi-journal-check" aria-hidden="true"></i><span>Décisions et échéances bien suivies</span></li>
+                            <li><i class="bi bi-people" aria-hidden="true"></i><span>Une équipe qui avance ensemble</span></li>
+                        </ul>
+                    </div>
 
-                <img
-                    class="logo"
-                    src="{{ asset('images/logo.png') }}"
-                    alt="YOBEL – Tech & Engineering Studio"
-                >
+                    <div class="login-showcase-footer">
+                        <span class="login-showcase-mark" aria-hidden="true"><i class="bi bi-stars"></i></span>
+                        <span>Clarté, collaboration, progression.</span>
+                    </div>
+                </aside>
+            @endif
 
-                @yield('content')
+            <div class="card auth-card">
 
+                <div class="card-body p-4 p-sm-5">
+
+                    <img
+                        class="logo"
+                        src="{{ asset('images/logo.png') }}"
+                        alt="YOBEL – Tech & Engineering Studio"
+                    >
+
+                    @yield('content')
+
+                </div>
             </div>
-
         </div>
-
     </div>
 
     {{-- Notifications --}}
