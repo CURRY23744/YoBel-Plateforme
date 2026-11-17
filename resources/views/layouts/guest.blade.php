@@ -44,7 +44,7 @@
     >
 
     {{-- CSS principal --}}
-    <link href="{{ asset('css/app.css') }}" rel="stylesheet">
+    <link href="{{ asset('css/app.css') }}?v={{ filemtime(public_path('css/app.css')) }}" rel="stylesheet">
 
     @stack('styles')
 </head>
