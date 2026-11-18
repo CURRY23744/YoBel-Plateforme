@@ -63,6 +63,32 @@ class DiscussionMessageApiTest extends TestCase
         $this->assertSame(0, $outsider->notifications()->count());
     }
 
+    public function test_project_messages_notify_all_visible_members_and_support_incremental_loading(): void
+    {
+        $project = $this->makeProject();
+        $author = $this->makeUser('member');
+        $reader = $this->makeUser('member');
+        $outsider = $this->makeUser('member');
+        $this->addMember($project, $author, 'contributor');
+        $this->addMember($project, $reader, 'reader');
+        $this->actingAsUser($author);
+
+        $discussionId = $this->postJson("/api/projects/{$project->id}/discussions", ['title' => 'Avancement'])->json('id');
+        $messageId = $this->postJson("/api/discussions/{$discussionId}/messages", ['body' => 'Point d’avancement'])
+            ->assertCreated()->json('id');
+
+        $this->assertSame(1, $reader->notifications()->count());
+        $this->assertSame(0, $outsider->notifications()->count());
+        $this->assertSame(
+            [$messageId],
+            collect($this->getJson("/api/discussions/{$discussionId}/messages?after_id=0")->json('data'))->pluck('id')->all()
+        );
+        $this->assertSame(
+            [],
+            $this->getJson("/api/discussions/{$discussionId}/messages?after_id={$messageId}")->json('data')
+        );
+    }
+
     public function test_locked_discussion_rejects_messages_from_simple_members(): void
     {
         $project = $this->makeProject();

@@ -259,12 +259,66 @@
     $('#projectTeam').innerHTML = `
       <div class="d-flex justify-content-between align-items-center mb-3">
         <div><h2 class="h5 mb-0">Équipe du projet</h2><div class="small text-muted">${team.length} membre(s) actif(s)</div></div>
-        ${allowed('manage') ? '<button type="button" class="btn btn-primary btn-sm" id="addMember"><i class="bi bi-person-plus me-1"></i>Ajouter un membre</button>' : ''}
+        <div class="d-flex flex-wrap gap-2">
+          ${currentUser.role === 'admin' ? '<button type="button" class="btn btn-outline-primary btn-sm" id="manageProjectAccess"><i class="bi bi-shield-lock me-1"></i>Gérer les accès</button>' : ''}
+          ${allowed('manage') ? '<button type="button" class="btn btn-primary btn-sm" id="addMember"><i class="bi bi-person-plus me-1"></i>Ajouter un membre</button>' : ''}
+        </div>
       </div>
       <div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>Membre</th><th>Rôle projet</th><th>Allocation</th><th>Droits</th><th></th></tr></thead><tbody>${memberRows()}</tbody></table></div>`;
     $('#addMember')?.addEventListener('click', addMember);
+    $('#manageProjectAccess')?.addEventListener('click', manageProjectAccess);
     $$('[data-edit-member]').forEach((button) => button.addEventListener('click', () => editMember(Number(button.dataset.editMember))));
     $$('[data-remove-member]').forEach((button) => button.addEventListener('click', () => removeMember(Number(button.dataset.removeMember))));
+  }
+
+  async function manageProjectAccess() {
+    try {
+      const users = [];
+      let page = 1;
+      let lastPage = 1;
+
+      do {
+        const result = await api('users', { params: { is_active: 1, per_page: 100, page } });
+        users.push(...(result.data || []));
+        lastPage = Number(result.last_page) || 1;
+        page += 1;
+      } while (page <= lastPage);
+
+      const visibleIds = new Set(team.filter((member) => !member.left_at && member.can_view).map((member) => Number(member.user_id)));
+      const options = users.map((user) => `
+        <label class="project-access-user d-flex align-items-center gap-2 border rounded p-2 mb-2" data-user-search="${esc(`${user.first_name} ${user.last_name} ${user.email}`.toLowerCase())}">
+          <input class="form-check-input m-0" type="checkbox" name="access_user_${esc(user.id)}" ${visibleIds.has(Number(user.id)) ? 'checked' : ''}>
+          <span><span class="d-block fw-semibold">${esc(userName(user))}</span><span class="small text-muted">${esc(user.email)}</span></span>
+        </label>`).join('');
+
+      formModal({
+        title: 'Accès au projet',
+        size: 'modal-lg',
+        submit: 'Enregistrer les accès',
+        html: `<p class="small text-muted">Seuls les membres sélectionnés pourront voir ce projet et ses contenus. Les autres membres seront retirés du projet. Les administrateurs conservent leur accès.</p>
+          <input class="form-control mb-3" type="search" id="projectAccessSearch" placeholder="Rechercher un membre" aria-label="Rechercher un membre">
+          <div class="project-access-list" style="max-height: 55vh; overflow-y: auto;">${options || '<div class="text-muted">Aucun utilisateur actif disponible.</div>'}</div>`,
+        onOpen: (form) => {
+          const search = $('#projectAccessSearch', form);
+          search.addEventListener('input', () => {
+            const query = search.value.trim().toLowerCase();
+            $$('.project-access-user', form).forEach((option) => {
+              option.hidden = !option.dataset.userSearch.includes(query);
+            });
+          });
+        },
+        onSubmit: async (data) => {
+          const userIds = users
+            .filter((user) => data[`access_user_${user.id}`])
+            .map((user) => user.id);
+          await api(`projects/${projectId}/access`, { method: 'PUT', body: { user_ids: userIds } });
+          await reloadProject();
+          toast('Les accès au projet ont été mis à jour.');
+        },
+      });
+    } catch (error) {
+      fail(error);
+    }
   }
 
   async function memberOptions() {
@@ -395,11 +449,73 @@
       ${field({ name: 'status', label: 'Statut', type: 'select', value: task?.status || 'todo', options: TASK_STATUSES, col: 'col-md-6' })}
       ${field({ name: 'priority', label: 'Priorité', type: 'select', value: task?.priority || 'medium', options: [['low', 'Faible'], ['medium', 'Moyenne'], ['high', 'Haute'], ['critical', 'Critique']], col: 'col-md-6' })}
       ${field({ name: 'assignee_id', label: 'Assigné à', type: 'select', blank: 'Non assignée', value: task?.assignee_id || '', options: members.map((member) => [member.user_id, userName(member.user)]), col: 'col-md-6' })}
+      ${['admin', 'project_manager'].includes(currentUser.role) ? '<div class="col-12"><div class="small text-muted" id="taskAssigneeAvailability" role="status">Choisissez une personne pour consulter ses disponibilités.</div></div>' : ''}
       ${field({ name: 'milestone_id', label: 'Jalon associé', type: 'select', blank: 'Aucun jalon', value: task?.milestone_id || '', options: milestones.map((milestone) => [milestone.id, milestone.title]), col: 'col-md-6' })}
       ${field({ name: 'start_date', label: 'Début', type: 'date', value: dateInput(task?.start_date), col: 'col-md-6' })}
       ${field({ name: 'due_date', label: 'Échéance', type: 'date', value: dateInput(task?.due_date), col: 'col-md-6' })}
       ${field({ name: 'estimated_minutes', label: 'Durée estimée (minutes)', type: 'number', min: 0, value: task?.estimated_minutes ?? '', col: 'col-md-6' })}
     </div>`;
+  }
+
+  function weekStartForDate(value) {
+    const date = value ? new Date(`${value}T00:00:00`) : new Date();
+    date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  function attachTaskAvailability(form) {
+    if (!['admin', 'project_manager'].includes(currentUser.role)) return;
+    const assignee = $('[name="assignee_id"]', form);
+    const hint = $('#taskAssigneeAvailability', form);
+    let requestId = 0;
+
+    const refresh = async () => {
+      const currentRequest = ++requestId;
+      if (!assignee.value) {
+        hint.textContent = 'Choisissez une personne pour consulter ses disponibilités.';
+        return;
+      }
+
+      const assigneeMember = (team.length ? team : project.members || [])
+        .find((member) => Number(member.user_id) === Number(assignee.value));
+      if (assigneeMember?.user?.role === 'guest') {
+        hint.textContent = 'Le planning n’est pas disponible pour les comptes invités.';
+        return;
+      }
+
+      const currentDate = new Date();
+      const today = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+      const date = $('[name="start_date"]', form).value || $('[name="due_date"]', form).value || today;
+      hint.textContent = 'Chargement des disponibilités…';
+
+      try {
+        const schedule = await api('planning', {
+          params: {
+            user_id: assignee.value,
+            week_start: weekStartForDate(date),
+          },
+        });
+        if (currentRequest !== requestId) return;
+        const day = schedule.days.find((item) => item.date === date);
+        if (!day || !day.is_configured) {
+          hint.textContent = 'Aucune disponibilité renseignée pour cette date.';
+        } else if (day.is_available) {
+          hint.textContent = `Disponible le ${day.label.toLowerCase()} de ${day.start_time || '—'} à ${day.end_time || '—'}${day.source === 'exception' ? ' (exceptionnel)' : ''}.`;
+        } else {
+          hint.textContent = `Indisponible le ${day.label.toLowerCase()}${day.reason ? ` : ${day.reason}` : ''}. L’affectation reste possible.`;
+        }
+      } catch (error) {
+        if (currentRequest === requestId) {
+          hint.textContent = 'La disponibilité ne peut pas être consultée pour le moment.';
+          fail(error);
+        }
+      }
+    };
+
+    assignee.addEventListener('change', refresh);
+    $('[name="start_date"]', form).addEventListener('change', refresh);
+    $('[name="due_date"]', form).addEventListener('change', refresh);
+    refresh();
   }
 
   async function loadTasks(nextPage = 1) {
@@ -468,6 +584,7 @@
     formModal({
       title: task ? 'Modifier la tâche' : 'Nouvelle tâche',
       html: taskFields(task),
+      onOpen: (form) => attachTaskAvailability(form),
       onSubmit: async (data) => {
         await api(task ? `tasks/${task.id}` : `projects/${projectId}/tasks`, { method: task ? 'PUT' : 'POST', body: data });
         loadedTabs.delete('tasks');
@@ -823,21 +940,51 @@
     });
   }
 
+  function projectChatMessage(message) {
+    const own = Number(message.user_id) === Number(currentUser.id);
+    const name = userName(message.user);
+    const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+    const tone = Math.abs(Number(message.user_id) || 0) % 5;
+
+    return `<article class="project-chat-row tone-${tone} ${own ? 'is-own' : ''}" data-message-id="${esc(message.id)}">
+      <div class="project-chat-avatar tone-${tone}" aria-hidden="true">${esc(initials || '?')}</div>
+      <div class="project-chat-bubble">
+        <div class="project-chat-meta"><strong>${esc(name)}</strong><time datetime="${esc(message.created_at)}">${esc(fmtDateTime(message.created_at))}</time>${message.edited_at ? '<span class="project-chat-edited">modifié</span>' : ''}</div>
+        <div class="project-chat-body text-break">${richText(message.body)}</div>
+        ${message.attachments?.length ? `<div class="small mt-2">${message.attachments.map((file) => `<span class="badge-soft bs-idea me-1"><i class="bi bi-paperclip"></i> ${esc(file.original_name)}</span>`).join('')}</div>` : ''}
+      </div>
+    </article>`;
+  }
+
+  function appendProjectChatMessages(container, messages, forceScroll = false) {
+    const shouldScroll = forceScroll || container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+    const empty = $('.project-chat-empty', container);
+    if (messages.length) empty?.remove();
+
+    messages.forEach((message) => {
+      if (container.querySelector(`[data-message-id="${Number(message.id)}"]`)) return;
+      container.insertAdjacentHTML('beforeend', projectChatMessage(message));
+    });
+
+    if (shouldScroll) container.scrollTop = container.scrollHeight;
+  }
+
   async function openDiscussion(discussion) {
     if (!discussion) return;
     const handle = modal({ title: esc(discussion.title), size: 'modal-lg', body: '<div class="text-center text-muted py-4">Chargement des messages…</div>' });
     try {
-      const result = await api(`discussions/${discussion.id}/messages`, { params: { per_page: 100 } });
+      let result = await api(`discussions/${discussion.id}/messages`, { params: { per_page: 100 } });
+      if (result.last_page > 1) {
+        result = await api(`discussions/${discussion.id}/messages`, { params: { page: result.last_page, per_page: 100 } });
+      }
+      if (!handle.el.isConnected) return;
       const messages = result.data || [];
       const canReply = allowed('comment') && !discussion.is_locked;
       handle.el.querySelector('.modal-body').innerHTML = `
-        <div class="message-list mb-3" style="max-height:55vh;overflow-y:auto">
-          ${messages.length ? messages.map((message) => `<article class="msg">
-            <div class="bubble flex-grow-1"><div class="meta">${esc(userName(message.user))} · ${esc(fmtDateTime(message.created_at))}${message.edited_at ? ' · modifié' : ''}</div>
-              <div>${richText(message.body)}</div>
-              ${message.attachments?.length ? `<div class="small mt-2">${message.attachments.map((file) => `<span class="badge-soft bs-idea me-1"><i class="bi bi-paperclip"></i> ${esc(file.original_name)}</span>`).join('')}</div>` : ''}
-            </div></article>`).join('') : '<div class="text-center text-muted py-3">Aucun message dans cette discussion.</div>'}
+        <div class="project-chat-list mb-3" id="projectChatMessages" aria-live="polite" aria-relevant="additions" aria-label="Messages de la discussion">
+          ${messages.length ? messages.map(projectChatMessage).join('') : '<div class="project-chat-empty text-center text-muted py-3">Aucun message dans cette discussion.</div>'}
         </div>
+        <div class="small text-muted mb-2" id="projectChatSyncStatus" role="status">Messages synchronisés automatiquement.</div>
         ${canReply ? `<form id="messageForm" class="border-top pt-3">
           <label class="form-label" for="messageBody">Votre message</label>
           <textarea class="form-control mb-2" id="messageBody" name="body" rows="3" maxlength="10000" required></textarea>
@@ -846,6 +993,37 @@
             <button type="submit" class="btn btn-primary btn-sm">Envoyer</button>
           </div>
         </form>` : discussion.is_locked ? '<div class="alert alert-secondary mb-0">Cette discussion est verrouillée.</div>' : ''}`;
+      const messageContainer = $('#projectChatMessages', handle.el);
+      messageContainer.scrollTop = messageContainer.scrollHeight;
+      let latestMessageId = messages.reduce((latest, message) => Math.max(latest, Number(message.id) || 0), 0);
+      let polling = false;
+      const pollMessages = async () => {
+        if (polling || document.hidden || !messageContainer.isConnected) return;
+        polling = true;
+        try {
+          const updates = await api(`discussions/${discussion.id}/messages`, {
+            params: { after_id: latestMessageId, per_page: 100 },
+          });
+          const newMessages = updates.data || [];
+          if (newMessages.length) {
+            appendProjectChatMessages(messageContainer, newMessages);
+            latestMessageId = newMessages.reduce((latest, message) => Math.max(latest, Number(message.id) || 0), latestMessageId);
+            $('#projectChatSyncStatus', handle.el).textContent = 'Nouveaux messages reçus.';
+          }
+        } catch (error) {
+          const status = $('#projectChatSyncStatus', handle.el);
+          if (status) status.textContent = 'Connexion interrompue ; nouvelle tentative automatique…';
+          if (error.status === 401 || error.status === 403 || error.status === 404) {
+            clearInterval(pollTimer);
+            fail(error);
+          }
+        } finally {
+          polling = false;
+        }
+      };
+      const pollTimer = setInterval(pollMessages, 2500);
+      handle.el.addEventListener('hidden.bs.modal', () => clearInterval(pollTimer), { once: true });
+
       const messageForm = $('#messageForm', handle.el);
       messageForm?.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -855,10 +1033,12 @@
         try {
           const body = new FormData(messageForm);
           if (!(body.get('attachments[]') instanceof File) || !body.get('attachments[]').size) body.delete('attachments[]');
-          await api(`discussions/${discussion.id}/messages`, { method: 'POST', form: body });
-          handle.close();
+          const message = await api(`discussions/${discussion.id}/messages`, { method: 'POST', form: body });
+          appendProjectChatMessages(messageContainer, [message], true);
+          latestMessageId = Math.max(latestMessageId, Number(message.id) || 0);
+          messageForm.reset();
+          $('#projectChatSyncStatus', handle.el).textContent = 'Message envoyé.';
           await loadDiscussions(discussionPage);
-          openDiscussion(discussion);
         } catch (error) {
           fail(error);
         } finally {
@@ -1214,6 +1394,17 @@
       renderOverview();
       loadedTabs.add('overview');
       $$('[data-project-tab]').forEach((button) => button.addEventListener('click', () => selectTab(button.dataset.projectTab)));
+
+      const targetDiscussionId = new URLSearchParams(location.search).get('discussion_id');
+      if (targetDiscussionId && /^\d+$/.test(targetDiscussionId)) {
+        await selectTab('discussions');
+        try {
+          const discussion = await api(`discussions/${targetDiscussionId}`);
+          if (Number(discussion.project_id) === Number(project.id)) openDiscussion(discussion);
+        } catch (error) {
+          fail(error);
+        }
+      }
     } catch (error) {
       $('#projectTitle').textContent = 'Projet indisponible';
       $('#projectSubtitle').textContent = '';

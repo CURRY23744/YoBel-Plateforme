@@ -149,13 +149,13 @@ class Project extends Model
 
     public static function nextReference(int $organizationId): string
     {
-        $year = now()->year;
+        $yearMonth = now()->format('Y-m');
         $count = static::withoutGlobalScopes()->withTrashed()
             ->where('organization_id', $organizationId)
-            ->where('reference', 'like', "PRJ-{$year}-%")
+            ->where('reference', 'like', "PRJ-{$yearMonth}-%")
             ->count();
 
-        return sprintf('PRJ-%d-%04d', $year, $count + 1);
+        return sprintf('PRJ-%s-%04d', $yearMonth, $count + 1);
     }
 
     /** Recalcule le score de priorité (0-100) à partir des évaluations et pondérations. */

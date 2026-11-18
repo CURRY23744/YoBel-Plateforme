@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\Discussion;
 use App\Models\Message;
 use App\Models\Project;
+use App\Support\Notifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -69,6 +70,11 @@ class DiscussionController extends ApiController
         });
 
         $discussion->load('creator:id,first_name,last_name');
+
+        if (! empty($data['body'])) {
+            $message = $discussion->messages()->latest('id')->firstOrFail();
+            Notifier::discussionMessage($discussion, $me, $message);
+        }
 
         return response()->json($discussion, 201);
     }

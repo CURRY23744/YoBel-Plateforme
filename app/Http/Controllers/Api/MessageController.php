@@ -20,7 +20,12 @@ class MessageController extends ApiController
     {
         $this->authorizeDiscussion($discussion);
 
+        $request->validate([
+            'after_id' => ['nullable', 'integer', 'min:0'],
+        ]);
+
         $messages = $discussion->messages()
+            ->when($request->filled('after_id'), fn ($q) => $q->where('id', '>', $request->integer('after_id')))
             ->with(['user:id,first_name,last_name,avatar_path', 'attachments', 'mentions:id,first_name,last_name'])
             ->orderBy('created_at')->orderBy('id')
             ->paginate($this->perPage($request));
@@ -81,12 +86,14 @@ class MessageController extends ApiController
             return $message;
         });
 
-        $context = ['project_id' => $discussion->project_id, 'discussion_id' => $discussion->id, 'message_id' => $message->id];
-        Notifier::send($mentionedUsers, 'message.mention', "{$me->name} vous a mentionné dans « {$discussion->title} »", Str::limit($message->body, 140), $context);
-
-        if ($discussion->creator && ! $mentionedUsers->contains('id', $discussion->created_by)) {
-            Notifier::send($discussion->creator, 'message.reply', "Nouveau message dans « {$discussion->title} »", Str::limit($message->body, 140), $context);
-        }
+        Notifier::send(
+            $mentionedUsers,
+            'message.mention',
+            "{$me->name} vous a mentionné dans « {$discussion->title} »",
+            Str::limit($message->body, 140),
+            ['project_id' => $discussion->project_id, 'discussion_id' => $discussion->id, 'message_id' => $message->id]
+        );
+        Notifier::discussionMessage($discussion, $me, $message, $mentionedUsers->modelKeys());
 
         return response()->json($message->load(['user:id,first_name,last_name', 'attachments', 'mentions:id,first_name,last_name']), 201);
     }

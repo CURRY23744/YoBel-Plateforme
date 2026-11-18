@@ -360,6 +360,14 @@
                     <input class="form-control" id="projectSearch" name="q" type="search" minlength="2" placeholder="Nom, référence, description">
                 </div>
                 <div class="col-6 col-lg-2">
+                    <label class="form-label" for="projectDateFrom">Créé du</label>
+                    <input class="form-control" id="projectDateFrom" name="from" type="date">
+                </div>
+                <div class="col-6 col-lg-2">
+                    <label class="form-label" for="projectDateTo">Créé au</label>
+                    <input class="form-control" id="projectDateTo" name="to" type="date">
+                </div>
+                <div class="col-6 col-lg-2">
                     <label class="form-label" for="projectType">Catégorie</label>
                     <select class="form-select" id="projectType" name="project_type_id">
                         <option value="">Toutes</option>

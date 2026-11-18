@@ -296,7 +296,7 @@
   // ------------------------------------------------------------------ notifications
   const NOTIF_ICON = { message: 'bi-chat-dots', task: 'bi-check2-square', project: 'bi-kanban', event: 'bi-calendar-event', file: 'bi-file-earmark', announcement: 'bi-megaphone' };
   const notifIcon = (type) => NOTIF_ICON[(type || '').split('.')[0]] || 'bi-bell';
-  const notifTarget = (d) => (d.project_id ? `/projects/${d.project_id}` : d.announcement_id ? '/space' : d.event_id ? '/agenda' : d.task_id ? '/tasks' : '/notifications');
+  const notifTarget = (d) => (d.project_id ? `/projects/${d.project_id}${d.discussion_id ? `?discussion_id=${encodeURIComponent(d.discussion_id)}` : ''}` : d.announcement_id ? '/space' : d.event_id ? '/agenda' : d.task_id ? '/tasks' : '/notifications');
   const notifHtml = (n) => {
     const d = n.data || {};
     return `<div class="notif-item ${n.read_at ? '' : 'unread'}" data-id="${n.id}" data-url="${notifTarget(d)}">
@@ -354,7 +354,7 @@
     $$('.sidebar .nav-link').forEach((a) => a.classList.toggle('active', a.dataset.nav === nav));
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
     document.getElementById('notifReadAll')?.addEventListener('click', async () => { await api('notifications/read-all', { method: 'POST' }); loadNotifications(); });
-    loadNotifications(); setInterval(loadNotifications, 60000);
+    loadNotifications(); setInterval(loadNotifications, 15000);
 
     const cbs = readyCbs; readyCbs = null;
     for (const cb of cbs) { try { await cb(u); } catch (e) { fail(e); } }

@@ -33,9 +33,33 @@ class ProjectCrudApiTest extends TestCase
 
         $response = $this->postJson('/api/projects', $this->payload(['technologies' => ['Laravel', 'MySQL']]))->assertCreated();
 
-        $this->assertMatchesRegularExpression('/^PRJ-\d{4}-0001$/', $response->json('reference'));
+        $this->assertMatchesRegularExpression('/^PRJ-\d{4}-\d{2}-0001$/', $response->json('reference'));
         $this->assertSame($manager->id, $response->json('manager_id'));
         $this->assertDatabaseHas('project_members', ['project_id' => $response->json('id'), 'user_id' => $manager->id, 'can_manage' => 1]);
+    }
+
+    public function test_admin_can_choose_project_viewers_when_creating_a_project(): void
+    {
+        $this->actingAsUser($this->makeUser('admin'));
+        $allowed = $this->makeUser('member');
+        $denied = $this->makeUser('member');
+
+        $projectId = $this->postJson('/api/projects', $this->payload([
+            'access_user_ids' => [$allowed->id],
+        ]))->assertCreated()->json('id');
+
+        $this->actingAsUser($allowed);
+        $this->getJson('/api/projects')->assertOk()->assertJsonCount(1, 'data');
+
+        $this->actingAsUser($denied);
+        $this->getJson('/api/projects')->assertOk()->assertJsonCount(0, 'data');
+
+        $this->assertDatabaseHas('project_members', [
+            'project_id' => $projectId,
+            'user_id' => $allowed->id,
+            'can_view' => true,
+            'left_at' => null,
+        ]);
     }
 
     public function test_references_are_sequential(): void
@@ -135,6 +159,44 @@ class ProjectCrudApiTest extends TestCase
         $this->assertSame([$b->id], $ids('?status=completed'));
         $this->assertSame([$late->id], $ids('?overdue=1'));
         $this->assertSame([$a->id], $ids("?q={$a->reference}"));
+    }
+
+    public function test_admin_can_restrict_project_visibility_to_selected_members(): void
+    {
+        $this->actingAsUser($this->makeUser('admin'));
+        $project = $this->makeProject(['project_type_id' => $this->type->id]);
+        $allowed = $this->makeUser('member');
+        $denied = $this->makeUser('member');
+
+        $this->putJson("/api/projects/{$project->id}/access", ['user_ids' => [$allowed->id]])->assertOk();
+
+        $this->actingAsUser($allowed);
+        $this->getJson('/api/projects')->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson("/api/projects/{$project->id}")->assertOk();
+
+        $this->actingAsUser($denied);
+        $this->putJson("/api/projects/{$project->id}/access", ['user_ids' => [$denied->id]])->assertForbidden();
+        $this->getJson('/api/projects')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson("/api/projects/{$project->id}")->assertNotFound();
+
+        $this->actingAsUser($this->makeUser('admin'));
+        $this->putJson("/api/projects/{$project->id}/access", ['user_ids' => []])->assertOk();
+        $this->assertDatabaseHas('project_members', [
+            'project_id' => $project->id,
+            'user_id' => $allowed->id,
+            'can_view' => false,
+        ]);
+    }
+
+    public function test_filters_by_project_creation_date_range(): void
+    {
+        $this->actingAsUser($this->makeUser('admin'));
+        $included = $this->makeProject(['project_type_id' => $this->type->id, 'created_at' => '2026-11-10 12:00:00']);
+        $excluded = $this->makeProject(['project_type_id' => $this->type->id, 'created_at' => '2026-11-20 12:00:00']);
+
+        $response = $this->getJson('/api/projects?from=2026-11-10&to=2026-11-15')->assertOk();
+
+        $this->assertSame([$included->id], collect($response->json('data'))->pluck('id')->all());
     }
 
     public function test_stats_and_show_details(): void

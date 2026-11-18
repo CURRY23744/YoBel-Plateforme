@@ -6,6 +6,7 @@
   const pageSize = 20;
   let page = 1;
   let types = [];
+  let currentUser;
 
   const STATUSES = [
     ['idea', 'Idée'],
@@ -24,6 +25,8 @@
   function currentFilters() {
     return {
       q: $('#projectSearch').value.trim(),
+      from: $('#projectDateFrom').value,
+      to: $('#projectDateTo').value,
       project_type_id: $('#projectType').value,
       status: $('#projectStatus').value,
       sort: $('#projectSort').value,
@@ -115,18 +118,36 @@
   }
 
   async function projectOptions() {
-    const [availableTypes, clientResult, availableTags, userResult] = await Promise.all([
+    const activeUsers = currentUser.role === 'admin'
+      ? allActiveUsers()
+      : api('users', { params: { is_active: 1, per_page: 100 } }).then((result) => result.data || []);
+    const [availableTypes, clientResult, availableTags, users] = await Promise.all([
       api('project-types'),
       api('clients', { params: { per_page: 100 } }),
       api('tags'),
-      api('users', { params: { is_active: 1, per_page: 100 } }),
+      activeUsers,
     ]);
     return {
       types: availableTypes,
       clients: clientResult.data || [],
       tags: availableTags,
-      users: userResult.data || [],
+      users,
     };
+  }
+
+  async function allActiveUsers() {
+    const users = [];
+    let pageNumber = 1;
+    let lastPage = 1;
+
+    do {
+      const result = await api('users', { params: { is_active: 1, per_page: 100, page: pageNumber } });
+      users.push(...(result.data || []));
+      lastPage = Number(result.last_page) || 1;
+      pageNumber += 1;
+    } while (pageNumber <= lastPage);
+
+    return users;
   }
 
   function projectForm(project, options, permissions = {}) {
@@ -150,6 +171,20 @@
       field({ name: 'production_url', label: 'Environnement de production', type: 'url', value: project?.production_url || '', col: 'col-md-4' }),
       field({ name: 'tags', label: 'Étiquettes', type: 'select', multiple: true, size: 4, value: (project?.tags || []).map((tag) => tag.id), options: options.tags.map((tag) => [tag.id, tag.name]), help: 'Maintenez Ctrl (ou Cmd sur Mac) pour sélectionner plusieurs étiquettes.' }),
     ];
+    if (isNew && currentUser.role === 'admin') {
+      forms.push(`<div class="col-12">
+        <label class="form-label" for="projectAccessSearch">Membres autorisés à voir le projet</label>
+        <input class="form-control mb-2" type="search" id="projectAccessSearch" placeholder="Rechercher un membre" aria-label="Rechercher un membre">
+        <div class="border rounded p-2" id="projectAccessUsers" style="max-height: 220px; overflow-y: auto;">
+          ${options.users.map((user) => `
+            <label class="project-access-user d-flex align-items-center gap-2 p-2 rounded" data-user-search="${esc(`${user.first_name} ${user.last_name} ${user.email}`.toLowerCase())}">
+              <input class="form-check-input m-0" type="checkbox" name="project_access_user_${esc(user.id)}">
+              <span><span class="d-block fw-semibold">${esc(`${user.first_name} ${user.last_name}`)}</span><span class="small text-muted">${esc(user.email)}</span></span>
+            </label>`).join('') || '<div class="text-muted p-2">Aucun utilisateur actif disponible.</div>'}
+        </div>
+        <div class="form-text">Seuls ces membres pourront voir le projet. Le responsable désigné et les administrateurs conservent leur accès.</div>
+      </div>`);
+    }
     if (isNew || permissions.manage) {
       forms.splice(3, 0, field({
         name: 'manager_id',
@@ -171,7 +206,22 @@
         html: `<div class="row g-3">${projectForm(null, options)}</div>`,
         size: 'modal-lg',
         submit: 'Créer le projet',
-        onSubmit: async (data, form) => {
+        onOpen: (form) => {
+          const search = $('#projectAccessSearch', form);
+          search?.addEventListener('input', () => {
+            const query = search.value.trim().toLowerCase();
+            $$('.project-access-user', form).forEach((option) => {
+              option.hidden = !option.dataset.userSearch.includes(query);
+            });
+          });
+        },
+        onSubmit: async (data) => {
+          if (currentUser.role === 'admin') {
+            data.access_user_ids = options.users
+              .filter((user) => data[`project_access_user_${user.id}`])
+              .map((user) => user.id);
+            options.users.forEach((user) => delete data[`project_access_user_${user.id}`]);
+          }
           data.technologies = (data.technologies || '').split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
           if (!data.technologies.length) data.technologies = null;
           const created = await api('projects', { method: 'POST', body: data });
@@ -187,6 +237,8 @@
   function populateFilters(query) {
     const params = new URLSearchParams(query);
     $('#projectSearch').value = params.get('q') || '';
+    $('#projectDateFrom').value = params.get('from') || '';
+    $('#projectDateTo').value = params.get('to') || '';
     $('#projectStatus').value = params.get('status') || '';
     $('#projectType').value = params.get('project_type_id') || '';
     $('#projectSort').value = params.get('sort') || 'created_at';
@@ -197,6 +249,7 @@
   }
 
   App.ready(async (user) => {
+    currentUser = user;
     types = await api('project-types');
     $('#projectType').insertAdjacentHTML('beforeend', types.map((type) => `<option value="${esc(type.id)}">${esc(type.name)}</option>`).join(''));
     $('#projectStatus').insertAdjacentHTML('beforeend', STATUSES.map(([value, label]) => `<option value="${value}">${label}</option>`).join(''));
@@ -212,7 +265,7 @@
       event.preventDefault();
       loadProjects(true);
     });
-    $$('#projectFilters select, #includeArchived, #overdueOnly').forEach((input) => input.addEventListener('change', () => loadProjects(true)));
+    $$('#projectFilters select, #projectDateFrom, #projectDateTo, #includeArchived, #overdueOnly').forEach((input) => input.addEventListener('change', () => loadProjects(true)));
     let searchTimeout;
     $('#projectSearch').addEventListener('input', () => {
       clearTimeout(searchTimeout);

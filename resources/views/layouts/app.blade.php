@@ -27,6 +27,7 @@
             <a class="nav-link" data-nav="projects" href="/projects"><i class="bi bi-kanban"></i> Tous les projets</a>
             <a class="nav-link" data-nav="tasks" href="/tasks"><i class="bi bi-check2-square"></i> Mes tâches</a>
             <a class="nav-link" data-nav="agenda" href="/agenda"><i class="bi bi-calendar3"></i> Agenda</a>
+            <a class="nav-link" data-nav="planning" data-roles="admin,project_manager,member" href="/planning"><i class="bi bi-calendar2-week"></i> Planning</a>
 
             <div class="nav-section" data-roles="admin,project_manager,member">Assistant</div>
             <a class="nav-link" data-nav="assistant" data-roles="admin,project_manager,member" href="/assistant"><i class="bi bi-stars"></i> Assistant Yobel</a>

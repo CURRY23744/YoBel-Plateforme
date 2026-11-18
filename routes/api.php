@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\MeetingMinuteController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\MilestoneController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PlanningController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ProjectEvaluationController;
 use App\Http\Controllers\Api\ProjectFileController;
@@ -105,6 +106,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::post('projects/{project}/members', [ProjectMemberController::class, 'store']);
     Route::put('projects/{project}/members/{user}', [ProjectMemberController::class, 'update']);
     Route::delete('projects/{project}/members/{user}', [ProjectMemberController::class, 'destroy']);
+    Route::put('projects/{project}/access', [ProjectMemberController::class, 'updateAccess'])->middleware('role:admin');
 
     // Jalons
     Route::get('projects/{project}/milestones', [MilestoneController::class, 'index']);
@@ -179,6 +181,10 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::put('events/{event}', [EventController::class, 'update']);
     Route::delete('events/{event}', [EventController::class, 'destroy']);
     Route::post('events/{event}/respond', [EventController::class, 'respond']);
+
+    // Planning
+    Route::get('planning', [PlanningController::class, 'index'])->middleware('role:admin,project_manager,member');
+    Route::put('planning', [PlanningController::class, 'update'])->middleware('role:admin,project_manager,member');
 
     // Annonces
     Route::get('announcements', [AnnouncementController::class, 'index']);

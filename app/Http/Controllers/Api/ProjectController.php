@@ -27,6 +27,17 @@ class ProjectController extends ApiController
             'priority' => ['nullable', Rule::enum(Priority::class)],
             'sort' => ['nullable', Rule::in(self::SORTABLE)],
             'direction' => 'nullable|in:asc,desc',
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => [
+                'nullable',
+                'date_format:Y-m-d',
+                function ($attribute, $value, $fail) use ($request) {
+                    $from = $request->query('from');
+                    if ($value && $from && $value < $from) {
+                        $fail('La date de fin doit être postérieure ou égale à la date de début.');
+                    }
+                },
+            ],
         ]);
 
         $query = Project::visibleTo($me)
@@ -46,6 +57,8 @@ class ProjectController extends ApiController
             ->when($request->filled('tag_id'), fn ($q) => $q->whereHas('tags', fn ($t) => $t->where('tags.id', $request->query('tag_id'))))
             ->when($request->filled('member_id'), fn ($q) => $q->whereHas('members', fn ($m) => $m->where('user_id', $request->query('member_id'))->whereNull('left_at')))
             ->when($request->filled('year'), fn ($q) => $q->whereYear('start_date', (int) $request->query('year')))
+            ->when($request->filled('from'), fn ($q) => $q->whereDate('projects.created_at', '>=', $request->query('from')))
+            ->when($request->filled('to'), fn ($q) => $q->whereDate('projects.created_at', '<=', $request->query('to')))
             ->when($request->boolean('overdue'), fn ($q) => $q->overdue())
             ->when($request->filled('q'), function ($q) use ($request) {
                 $s = '%'.$request->query('q').'%';
@@ -92,12 +105,28 @@ class ProjectController extends ApiController
 
         $data = $request->validate($this->rules(true));
         $tags = Arr::pull($data, 'tags');
+        $accessUserIds = [];
+
+        if ($request->exists('access_user_ids')) {
+            abort_unless($me->isAdmin(), 403, 'Seul un administrateur peut définir les accès lors de la création.');
+            $accessUserIds = $request->validate([
+                'access_user_ids' => ['array'],
+                'access_user_ids.*' => [
+                    'required',
+                    'integer',
+                    'distinct',
+                    Rule::exists('users', 'id')
+                        ->where('organization_id', $me->organization_id)
+                        ->where('is_active', true),
+                ],
+            ])['access_user_ids'] ?? [];
+        }
 
         if (empty($data['manager_id']) && $me->isManager()) {
             $data['manager_id'] = $me->id;
         }
 
-        $project = DB::transaction(function () use ($data, $tags, $me) {
+        $project = DB::transaction(function () use ($data, $tags, $accessUserIds, $me) {
             $project = Project::create($data + [
                 'organization_id' => $me->organization_id,
                 'reference' => Project::nextReference($me->organization_id),
@@ -107,6 +136,18 @@ class ProjectController extends ApiController
 
             if (is_array($tags)) {
                 $project->tags()->sync($tags);
+            }
+
+            foreach ($accessUserIds as $userId) {
+                ProjectMember::updateOrCreate(
+                    ['project_id' => $project->id, 'user_id' => $userId],
+                    ProjectMember::PRESETS['reader'] + [
+                        'project_role' => 'developer',
+                        'joined_at' => now(),
+                        'left_at' => null,
+                        'added_by' => $me->id,
+                    ]
+                );
             }
 
             if (! $me->isAdmin()) {

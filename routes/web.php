@@ -30,6 +30,7 @@ Route::view('/projects/{id}', 'projects.show')->whereNumber('id');
 
 Route::view('/tasks', 'tasks.index');
 Route::view('/agenda', 'agenda.index');
+Route::view('/planning', 'planning.index');
 Route::view('/space', 'space.index');
 Route::view('/assistant', 'assistant.index');
 Route::view('/decisions', 'registers.index')->name('decisions');

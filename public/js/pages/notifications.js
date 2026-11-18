@@ -4,6 +4,7 @@
   const { $, $$, api, esc, ago, notifTarget, pager, confirm: confirmBox, toast, fail, ready, go } = App;
   const list = $('#notificationItems');
   let page = 1;
+  let loading = false;
 
   function notificationIcon(type) {
     const icons = {
@@ -45,14 +46,20 @@
     pager($('#notificationPager'), result.notifications, (nextPage) => { page = nextPage; loadNotifications(); });
   }
 
-  async function loadNotifications() {
-    list.innerHTML = '<div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2" role="status"></span>Chargement des notifications…</div>';
+  async function loadNotifications(showLoading = false) {
+    if (loading || document.hidden) return;
+    loading = true;
+    if (showLoading) {
+      list.innerHTML = '<div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2" role="status"></span>Chargement des notifications…</div>';
+    }
     try {
       const result = await api('notifications', { params: { unread: $('#unreadOnly').checked, page, per_page: 20 } });
       renderNotifications(result);
     } catch (error) {
       list.innerHTML = '<div class="text-center text-danger py-5">Impossible de charger les notifications.</div>';
       fail(error);
+    } finally {
+      loading = false;
     }
   }
 
@@ -98,7 +105,8 @@
         fail(error);
       }
     });
-    loadNotifications();
+    loadNotifications(true);
+    setInterval(() => loadNotifications(), 15000);
   }
 
   ready(init);

@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\Notifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class ProjectMemberController extends ApiController
@@ -76,6 +77,56 @@ class ProjectMemberController extends ApiController
         $member->update(ProjectMember::NO_RIGHTS + ['left_at' => now()]);
 
         return response()->json(['message' => 'Membre retiré du projet.']);
+    }
+
+    public function updateAccess(Request $request, Project $project): JsonResponse
+    {
+        abort_unless($this->me()->isAdmin(), 403, 'Seul un administrateur peut gérer les accès au projet.');
+        abort_unless($project->organization_id === $this->me()->organization_id, 404, 'Projet introuvable.');
+
+        $data = $request->validate([
+            'user_ids' => ['present', 'array'],
+            'user_ids.*' => [
+                'required',
+                'integer',
+                'distinct',
+                Rule::exists('users', 'id')
+                    ->where('organization_id', $project->organization_id)
+                    ->where('is_active', true),
+            ],
+        ]);
+
+        $selectedIds = array_map('intval', $data['user_ids']);
+
+        DB::transaction(function () use ($project, $selectedIds) {
+            $now = now();
+
+            $project->members()
+                ->whereNull('left_at')
+                ->whereNotIn('user_id', $selectedIds ?: [0])
+                ->update(ProjectMember::NO_RIGHTS + ['left_at' => $now, 'updated_at' => $now]);
+
+            foreach ($selectedIds as $userId) {
+                $member = ProjectMember::firstOrNew([
+                    'project_id' => $project->id,
+                    'user_id' => $userId,
+                ]);
+
+                if (! $member->exists || $member->left_at !== null || ! $member->can_view) {
+                    $member->fill(ProjectMember::PRESETS['reader'] + [
+                        'project_role' => $member->project_role ?: 'developer',
+                        'joined_at' => $now,
+                        'left_at' => null,
+                        'added_by' => $this->me()->id,
+                    ])->save();
+                }
+            }
+        });
+
+        return response()->json([
+            'message' => 'Les accès au projet ont été mis à jour.',
+            'user_ids' => $selectedIds,
+        ]);
     }
 
     private function activeMember(Project $project, User $user): ProjectMember
