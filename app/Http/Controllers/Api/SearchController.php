@@ -38,7 +38,9 @@ class SearchController extends ApiController
                 ->when($deniedFolders, fn ($q) => $q->where(fn ($w) => $w->whereNull('folder_id')->orWhereNotIn('folder_id', $deniedFolders)))
                 ->limit($limit)->get(['id', 'project_id', 'name', 'category']),
 
-            'tasks' => Task::whereIn('project_id', $projectIds)->where('title', 'like', $term)->limit($limit)->get(['id', 'project_id', 'title', 'status']),
+            'tasks' => Task::whereIn('project_id', $projectIds)
+                ->when($me->isGuest(), fn ($q) => $q->where('assignee_id', $me->id))
+                ->where('title', 'like', $term)->limit($limit)->get(['id', 'project_id', 'title', 'status']),
 
             'decisions' => Decision::whereIn('project_id', $projectIds)
                 ->where(fn ($w) => $w->where('title', 'like', $term)->orWhere('decision', 'like', $term))

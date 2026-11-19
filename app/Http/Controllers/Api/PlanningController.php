@@ -78,7 +78,7 @@ class PlanningController extends ApiController
             'weekly.*.is_available' => ['required', 'boolean'],
             'weekly.*.start_time' => ['nullable', 'date_format:H:i'],
             'weekly.*.end_time' => ['nullable', 'date_format:H:i'],
-            'exceptions' => ['required', 'array', 'max:7'],
+            'exceptions' => ['present', 'array', 'max:7'],
             'exceptions.*.date' => ['required', 'date_format:Y-m-d', 'distinct'],
             'exceptions.*.mode' => ['required', 'in:available,unavailable'],
             'exceptions.*.start_time' => ['nullable', 'date_format:H:i'],

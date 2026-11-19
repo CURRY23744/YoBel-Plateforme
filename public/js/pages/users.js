@@ -91,8 +91,86 @@
       ${field({ name: 'job_title', label: 'Fonction', value: person?.job_title || '', col: 'col-md-6' })}
       ${field({ name: 'department', label: 'Service', value: person?.department || '', col: 'col-md-6' })}
       ${field({ name: 'employee_number', label: 'Matricule', value: person?.employee_number || '', col: 'col-md-6' })}
+      ${isEdit ? '' : `<div class="col-12 d-none" id="guestAssignmentFields">
+        <div class="row g-3">
+          ${field({ name: 'project_id', label: 'Projet autorisé', type: 'select', required: true, blank: 'Choisir un projet', options: [] })}
+          ${field({ name: 'task_ids', label: 'Tâches confiées', type: 'select', multiple: true, size: 6, options: [], help: 'L’invité ne verra que les tâches sélectionnées et les informations de ce projet.' })}
+          <div class="col-12"><div class="small text-muted" id="guestAssignmentStatus">Choisissez le projet de collaboration de cet invité.</div></div>
+        </div>
+      </div>`}
       ${isEdit ? '' : '<div class="col-12"><div class="alert alert-info mb-0 small">Un mot de passe temporaire sera généré. L’utilisateur devra le changer à sa première connexion.</div></div>'}
     </div>`;
+  }
+
+  async function setupGuestAssignment(form) {
+    const role = $('[name="role"]', form);
+    const section = $('#guestAssignmentFields', form);
+    if (!section) return;
+
+    const projectSelect = $('[name="project_id"]', form);
+    const taskSelect = $('[name="task_ids"]', form);
+    const status = $('#guestAssignmentStatus', form);
+    const updateVisibility = () => {
+      const isGuest = role.value === 'guest';
+      section.classList.toggle('d-none', !isGuest);
+      projectSelect.disabled = !isGuest;
+      projectSelect.required = isGuest;
+      taskSelect.disabled = !isGuest || !projectSelect.value;
+    };
+
+    role.addEventListener('change', updateVisibility);
+    projectSelect.addEventListener('change', async () => {
+      taskSelect.innerHTML = '';
+      taskSelect.disabled = !projectSelect.value || role.value !== 'guest';
+      if (!projectSelect.value) {
+        status.textContent = 'Choisissez le projet de collaboration de cet invité.';
+        return;
+      }
+
+      status.textContent = 'Chargement des tâches du projet…';
+      try {
+        let result = await api('tasks', { params: { project_id: projectSelect.value, page: 1, per_page: 100 } });
+        const tasks = [...(result.data || [])];
+        for (let pageNumber = 2; pageNumber <= result.last_page; pageNumber++) {
+          result = await api('tasks', { params: { project_id: projectSelect.value, page: pageNumber, per_page: 100 } });
+          tasks.push(...(result.data || []));
+        }
+
+        taskSelect.innerHTML = tasks.map((task) => {
+          const option = document.createElement('option');
+          option.value = task.id;
+          option.textContent = `${task.title} · ${L.task[task.status] || task.status}`;
+          return option.outerHTML;
+        }).join('');
+        status.textContent = tasks.length
+          ? 'Sélectionnez les tâches que l’invité pourra consulter et mettre à jour.'
+          : 'Ce projet ne contient pas encore de tâches à assigner.';
+      } catch (error) {
+        status.textContent = 'Impossible de charger les tâches de ce projet.';
+        fail(error);
+      }
+    });
+
+    updateVisibility();
+    try {
+      let result = await api('projects', { params: { per_page: 100, sort: 'name', direction: 'asc' } });
+      const projects = [...(result.data || [])];
+      for (let pageNumber = 2; pageNumber <= result.last_page; pageNumber++) {
+        result = await api('projects', { params: { page: pageNumber, per_page: 100, sort: 'name', direction: 'asc' } });
+        projects.push(...(result.data || []));
+      }
+      projects.forEach((project) => {
+        projectSelect.add(new Option(`${project.reference} · ${project.name}`, project.id));
+      });
+      if (!projects.length) {
+        status.textContent = 'Créez un projet avant d’ajouter un invité.';
+        $('[value="guest"]', role).disabled = true;
+      }
+    } catch (error) {
+      fail(error);
+      status.textContent = 'Impossible de charger les projets disponibles.';
+      $('[value="guest"]', role).disabled = true;
+    }
   }
 
   function createUser() {
@@ -100,6 +178,7 @@
       title: 'Créer un utilisateur',
       size: 'modal-lg',
       html: userFields(null),
+      onOpen: (form) => setupGuestAssignment(form),
       onSubmit: async (data, form, handle) => {
         const result = await api('users', { method: 'POST', body: data });
         await loadUsers();

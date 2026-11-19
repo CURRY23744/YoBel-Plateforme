@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Models\Decision;
 use App\Models\MeetingMinute;
 use App\Models\Task;
+use App\Notifications\AppNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\CreatesTenants;
 use Tests\TestCase;
@@ -147,7 +148,7 @@ class TaskDecisionApiTest extends TestCase
         $this->postJson('/api/meeting-minutes', ['title' => 'Réunion', 'content' => 'Décision prise'])->assertForbidden();
 
         $this->actingAsUser($guest);
-        $this->getJson('/api/meeting-minutes')->assertForbidden();
+        $this->getJson('/api/meeting-minutes')->assertOk()->assertJsonCount(0, 'data');
 
         $this->actingAsUser($staff);
         $id = $this->postJson('/api/meeting-minutes', [
@@ -165,6 +166,72 @@ class TaskDecisionApiTest extends TestCase
             ->assertJsonPath('title', 'Réunion mise à jour');
         $this->deleteJson("/api/meeting-minutes/{$id}")->assertNoContent();
         $this->assertSoftDeleted(MeetingMinute::class, ['id' => $id]);
+    }
+
+    public function test_guest_sees_only_project_decisions_and_meeting_minutes(): void
+    {
+        $visibleProject = $this->makeProject();
+        $hiddenProject = $this->makeProject();
+        $guest = $this->makeUser('guest');
+        $creator = $this->makeUser('admin');
+        $this->addMember($visibleProject, $guest, 'reader');
+        $visibleDecision = Decision::create([
+            'organization_id' => $this->org->id,
+            'project_id' => $visibleProject->id,
+            'created_by' => $creator->id,
+            'title' => 'Décision visible',
+            'decision' => 'Continuer',
+        ]);
+        $hiddenDecision = Decision::create([
+            'organization_id' => $this->org->id,
+            'project_id' => $hiddenProject->id,
+            'created_by' => $creator->id,
+            'title' => 'Décision masquée',
+            'decision' => 'Confidentiel',
+        ]);
+        $generalMinute = MeetingMinute::create([
+            'organization_id' => $this->org->id,
+            'created_by' => $creator->id,
+            'title' => 'Compte rendu général',
+            'content' => 'Interne',
+        ]);
+        $projectMinute = MeetingMinute::create([
+            'organization_id' => $this->org->id,
+            'project_id' => $visibleProject->id,
+            'created_by' => $creator->id,
+            'title' => 'Compte rendu projet',
+            'content' => 'Visible',
+        ]);
+
+        $this->actingAsUser($guest);
+        $this->getJson('/api/decisions')->assertOk()->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $visibleDecision->id);
+        $this->getJson('/api/meeting-minutes')->assertOk()->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $projectMinute->id);
+        $this->getJson("/api/decisions/{$hiddenDecision->id}")->assertNotFound();
+        $this->getJson("/api/meeting-minutes/{$generalMinute->id}")->assertForbidden();
+    }
+
+    public function test_guest_notifications_are_limited_to_accessible_projects(): void
+    {
+        $visibleProject = $this->makeProject();
+        $hiddenProject = $this->makeProject();
+        $guest = $this->makeUser('guest');
+        $this->addMember($visibleProject, $guest, 'reader');
+        $guest->notify(new AppNotification(['type' => 'message.reply', 'title' => 'Visible', 'project_id' => $visibleProject->id]));
+        $guest->notify(new AppNotification(['type' => 'message.reply', 'title' => 'Hidden', 'project_id' => $hiddenProject->id]));
+        $guest->notify(new AppNotification(['type' => 'announcement', 'title' => 'General']));
+        $visibleNotification = $guest->notifications()->where('data->title', 'Visible')->firstOrFail();
+        $hiddenNotification = $guest->notifications()->where('data->title', 'Hidden')->firstOrFail();
+
+        $this->actingAsUser($guest);
+        $this->getJson('/api/notifications')
+            ->assertOk()
+            ->assertJsonPath('unread_count', 1)
+            ->assertJsonCount(1, 'notifications.data')
+            ->assertJsonPath('notifications.data.0.data.title', 'Visible');
+        $this->postJson("/api/notifications/{$hiddenNotification->id}/read")->assertNotFound();
+        $this->postJson("/api/notifications/{$visibleNotification->id}/read")->assertOk();
     }
 
     public function test_notifications_can_be_read(): void

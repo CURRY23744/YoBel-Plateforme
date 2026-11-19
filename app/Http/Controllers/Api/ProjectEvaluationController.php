@@ -15,7 +15,7 @@ class ProjectEvaluationController extends ApiController
     /** Détail des évaluations d'un projet, critère par critère. */
     public function show(Project $project): JsonResponse
     {
-        abort_unless($this->me()->isStaff(), 403, 'Les évaluations sont réservées à la direction.');
+        abort_unless($this->me()->isStaff() || $this->me()->isGuest(), 403, 'Les évaluations sont réservées aux membres autorisés du projet.');
         $this->authorizeProject($project);
 
         $criteria = EvaluationCriterion::where('is_active', true)->orderBy('sort_order')->get();
@@ -70,7 +70,7 @@ class ProjectEvaluationController extends ApiController
     public function ranking(Request $request): JsonResponse
     {
         $me = $this->me();
-        abort_unless($me->isStaff(), 403);
+        abort_unless($me->isStaff() || $me->isGuest(), 403);
 
         $projects = Project::visibleTo($me)
             ->where('is_archived', false)

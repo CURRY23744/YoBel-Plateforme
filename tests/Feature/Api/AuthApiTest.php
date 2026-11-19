@@ -76,7 +76,6 @@ class AuthApiTest extends TestCase
         $this->getJson('/api/projects')->assertStatus(403)->assertJsonPath('code', 'password_change_required');
 
         $this->postJson('/api/auth/change-password', [
-            'current_password' => 'Password123',
             'password' => 'NouveauPass456',
             'password_confirmation' => 'NouveauPass456',
         ])->assertOk();
@@ -87,6 +86,10 @@ class AuthApiTest extends TestCase
     public function test_change_password_requires_correct_current_password_and_strength(): void
     {
         $this->actingAsUser($this->makeUser());
+
+        $this->postJson('/api/auth/change-password', [
+            'password' => 'NouveauPass456', 'password_confirmation' => 'NouveauPass456',
+        ])->assertStatus(422)->assertJsonValidationErrors('current_password');
 
         $this->postJson('/api/auth/change-password', [
             'current_password' => 'faux', 'password' => 'NouveauPass456', 'password_confirmation' => 'NouveauPass456',

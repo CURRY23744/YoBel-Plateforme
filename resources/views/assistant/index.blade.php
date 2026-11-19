@@ -2,7 +2,7 @@
 
 @section('title', 'Assistant Yobel')
 @section('nav', 'assistant')
-@section('page-roles', 'admin,project_manager,member')
+@section('page-roles', 'admin,project_manager,member,guest')
 
 @section('content')
     <div id="assistantPage">
@@ -21,7 +21,7 @@
 
         <div class="alert alert-info" role="note">
             <i class="bi bi-shield-lock me-1"></i>
-            Yobel utilise Google Gemini pour répondre librement. Votre question, les derniers échanges de ce contexte et, si vous choisissez un projet, les données accessibles de ce projet sont transmis à Google. Consultez les conditions et règles de conservation de Google avant utilisation. Yobel ne modifie aucune donnée.
+            Yobel utilise Google Gemini pour répondre à vos questions. Votre question, les derniers échanges de ce contexte et, si vous choisissez un projet, les données accessibles de ce projet sont transmis à Google. Consultez les conditions et règles de conservation de Google avant utilisation. Yobel ne modifie aucune donnée.
         </div>
 
         <div class="card">

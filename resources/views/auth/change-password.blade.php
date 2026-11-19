@@ -5,15 +5,15 @@
 
 @section('content')
     <h1 class="h4 text-center mb-1">Sécurisez votre compte</h1>
-    <p class="text-muted text-center mb-4">Pour continuer, remplacez le mot de passe temporaire reçu par un mot de passe personnel.</p>
+    <p class="text-muted text-center mb-4" id="changePasswordIntro">Définissez un mot de passe personnel pour votre compte.</p>
 
     <div id="formAlert" class="alert d-none" role="alert"></div>
 
     <form id="changeForm" novalidate>
-        <div class="mb-3">
+        <div class="mb-3" id="currentPasswordGroup">
             <label class="form-label" for="current_password">Mot de passe actuel (temporaire)</label>
             <div class="input-group password-group">
-                <input type="password" class="form-control" id="current_password" name="current_password" autocomplete="current-password" required autofocus>
+                <input type="password" class="form-control" id="current_password" name="current_password" autocomplete="current-password">
                 <button class="btn btn-outline-secondary" type="button" data-toggle-password="#current_password" aria-label="Afficher le mot de passe"><i class="bi bi-eye"></i></button>
             </div>
         </div>

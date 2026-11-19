@@ -61,12 +61,32 @@ class AiAssistantApiTest extends TestCase
             ->assertJsonCount(0, 'data');
     }
 
-    public function test_guest_cannot_use_yobel(): void
+    public function test_guest_can_use_yobel_only_with_an_assigned_project(): void
     {
-        $this->actingAsUser($this->makeUser('guest'));
+        $project = $this->makeProject();
+        $guest = $this->makeUser('guest');
+        $this->addMember($project, $guest, 'contributor');
+        Task::create([
+            'project_id' => $project->id,
+            'organization_id' => $this->org->id,
+            'title' => 'Tâche confiée à l’invité',
+            'assignee_id' => $guest->id,
+        ]);
+        Task::create([
+            'project_id' => $project->id,
+            'organization_id' => $this->org->id,
+            'title' => 'Tâche interne confidentielle',
+        ]);
+        $this->fakeGemini('Réponse liée au projet.');
+        $this->actingAsUser($guest);
 
         $this->getJson('/api/ai/interactions')->assertForbidden();
         $this->postJson('/api/ai/ask', ['prompt' => 'Bonjour'])->assertForbidden();
+        $this->postJson('/api/ai/ask', ['prompt' => 'Bonjour', 'project_id' => $project->id])
+            ->assertCreated()
+            ->assertJsonPath('response', 'Réponse liée au projet.');
+        Http::assertSent(fn (HttpRequest $request) => str_contains(data_get($request->data(), 'systemInstruction.parts.0.text', ''), 'Tâche confiée à l’invité')
+            && ! str_contains(data_get($request->data(), 'systemInstruction.parts.0.text', ''), 'Tâche interne confidentielle'));
     }
 
     public function test_project_context_requires_project_visibility(): void
@@ -118,11 +138,11 @@ class AiAssistantApiTest extends TestCase
             && data_get($request->data(), 'contents.2.parts.0.text') === 'Aide-moi à la préciser.');
     }
 
-    public function test_assistant_page_is_limited_to_non_guest_roles(): void
+    public function test_assistant_page_is_available_to_guests(): void
     {
         $this->get('/assistant')
             ->assertOk()
-            ->assertSee('data-page-roles="admin,project_manager,member"', false)
+            ->assertSee('data-page-roles="admin,project_manager,member,guest"', false)
             ->assertSee('Assistant Yobel');
     }
 

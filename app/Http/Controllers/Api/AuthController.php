@@ -109,14 +109,18 @@ class AuthController extends ApiController
 
     public function changePassword(Request $request): JsonResponse
     {
-        $data = $request->validate([
-            'current_password' => 'required|string',
-            'password' => ['required', 'confirmed', PasswordRule::min(8)->mixedCase()->numbers()],
-        ]);
-
         $user = $request->user();
+        $rules = [
+            'password' => ['required', 'confirmed', PasswordRule::min(8)->mixedCase()->numbers()],
+        ];
 
-        if (! Hash::check($data['current_password'], $user->password)) {
+        if (! $user->must_change_password) {
+            $rules['current_password'] = 'required|string';
+        }
+
+        $data = $request->validate($rules);
+
+        if (! $user->must_change_password && ! Hash::check($data['current_password'], $user->password)) {
             return response()->json(['message' => 'Mot de passe actuel incorrect.', 'errors' => ['current_password' => ['Mot de passe actuel incorrect.']]], 422);
         }
 

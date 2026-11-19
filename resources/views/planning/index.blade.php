@@ -2,7 +2,7 @@
 
 @section('title', 'Planning')
 @section('nav', 'planning')
-@section('page-roles', 'admin,project_manager,member')
+@section('page-roles', 'admin,project_manager,member,guest')
 
 @section('content')
 <div class="planning-root">

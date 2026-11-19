@@ -73,6 +73,50 @@ class EvaluationEventApiTest extends TestCase
         $this->getJson('/api/evaluations/ranking')->assertForbidden();
     }
 
+    public function test_guest_can_read_only_evaluation_for_an_accessible_project(): void
+    {
+        $project = $this->makeProject(['priority_score' => 72]);
+        $hidden = $this->makeProject(['priority_score' => 91]);
+        $guest = $this->makeUser('guest');
+        $this->addMember($project, $guest, 'reader');
+        $this->actingAsUser($guest);
+
+        $this->getJson("/api/projects/{$project->id}/evaluations")->assertOk()->assertJsonPath('priority_score', '72.00');
+        $this->getJson("/api/projects/{$hidden->id}/evaluations")->assertNotFound();
+        $this->getJson('/api/evaluations/ranking')->assertOk()->assertJsonCount(1)->assertJsonPath('0.id', $project->id);
+        $this->postJson("/api/projects/{$project->id}/evaluations", ['scores' => [['criterion_id' => 1, 'score' => 8]]])->assertForbidden();
+    }
+
+    public function test_guest_agenda_is_limited_to_accessible_project_events(): void
+    {
+        $project = $this->makeProject();
+        $hiddenProject = $this->makeProject();
+        $guest = $this->makeUser('guest');
+        $this->addMember($project, $guest, 'reader');
+        $event = \App\Models\Event::create([
+            'organization_id' => $this->org->id,
+            'project_id' => $project->id,
+            'created_by' => $this->makeUser('admin')->id,
+            'title' => 'Réunion projet assigné',
+            'type' => 'meeting',
+            'visibility' => 'project',
+            'starts_at' => now()->addDay(),
+        ]);
+        $hiddenEvent = \App\Models\Event::create([
+            'organization_id' => $this->org->id,
+            'project_id' => $hiddenProject->id,
+            'created_by' => $this->makeUser('admin')->id,
+            'title' => 'Réunion autre projet',
+            'type' => 'meeting',
+            'visibility' => 'project',
+            'starts_at' => now()->addDay(),
+        ]);
+        $this->actingAsUser($guest);
+
+        $this->getJson('/api/events')->assertOk()->assertJsonCount(1)->assertJsonPath('0.id', $event->id);
+        $this->getJson("/api/events/{$hiddenEvent->id}")->assertNotFound();
+    }
+
     public function test_project_event_with_participants_and_response(): void
     {
         $project = $this->makeProject();

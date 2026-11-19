@@ -159,6 +159,7 @@
 
   async function init(user) {
     currentUser = user;
+    if (user.role === 'guest') $('#taskShowAll').closest('.col-12').classList.add('d-none');
     if (user.role !== 'guest') {
       $('#taskActions').innerHTML = '<button type="button" class="btn btn-primary" id="createTask"><i class="bi bi-plus-lg me-1"></i>Nouvelle tâche</button>';
       $('#createTask').addEventListener('click', createTask);

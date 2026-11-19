@@ -74,8 +74,10 @@ class DiscussionMessageApiTest extends TestCase
         $this->actingAsUser($author);
 
         $discussionId = $this->postJson("/api/projects/{$project->id}/discussions", ['title' => 'Avancement'])->json('id');
-        $messageId = $this->postJson("/api/discussions/{$discussionId}/messages", ['body' => 'Point d’avancement'])
-            ->assertCreated()->json('id');
+        $response = $this->postJson("/api/discussions/{$discussionId}/messages", ['body' => 'Point d’avancement'])
+            ->assertCreated();
+        $this->assertFalse((bool) $response->json('notification_warning'), json_encode($response->json()));
+        $messageId = $response->json('id');
 
         $this->assertSame(1, $reader->notifications()->count());
         $this->assertSame(0, $outsider->notifications()->count());

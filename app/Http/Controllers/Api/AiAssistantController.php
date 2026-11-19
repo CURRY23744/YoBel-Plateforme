@@ -19,10 +19,10 @@ class AiAssistantController extends ApiController
 {
     public function index(Request $request): JsonResponse
     {
-        $this->authorizeGeneral();
         $data = $request->validate(['project_id' => 'nullable|integer']);
         $user = $this->me();
         $projectId = $data['project_id'] ?? null;
+        abort_if($user->isGuest() && ! $projectId, 403, 'Un invité doit choisir un projet auquel il a accès.');
 
         if ($projectId) {
             $project = Project::visibleTo($user)->findOrFail($projectId);
@@ -41,12 +41,12 @@ class AiAssistantController extends ApiController
 
     public function ask(Request $request, YobelAssistant $assistant): JsonResponse
     {
-        $this->authorizeGeneral();
         $data = $request->validate([
             'prompt' => 'required|string|min:2|max:4000',
             'project_id' => 'nullable|integer',
         ]);
         $user = $this->me();
+        abort_if($user->isGuest() && empty($data['project_id']), 403, 'Un invité doit choisir un projet auquel il a accès.');
         $project = null;
 
         if (! empty($data['project_id'])) {
@@ -124,7 +124,6 @@ class AiAssistantController extends ApiController
 
     public function reviewSuggestion(Request $request, AiSuggestion $suggestion): JsonResponse
     {
-        $this->authorizeGeneral();
         $data = $request->validate(['status' => 'required|in:accepted,rejected']);
         $interaction = $suggestion->interaction;
 
@@ -145,8 +144,11 @@ class AiAssistantController extends ApiController
 
     private function projectContext(Project $project): array
     {
-        $taskCounts = Task::query()
+        $me = $this->me();
+        $tasks = fn () => Task::query()
             ->where('project_id', $project->id)
+            ->when($me->isGuest(), fn ($query) => $query->where('assignee_id', $me->id));
+        $taskCounts = $tasks()
             ->selectRaw('status, COUNT(*) as aggregate')
             ->groupBy('status')
             ->get()
@@ -162,28 +164,24 @@ class AiAssistantController extends ApiController
                 'total' => $totalTasks,
                 'open' => $totalTasks - (int) $taskCounts->get('done', 0) - (int) $taskCounts->get('cancelled', 0),
                 'done' => (int) $taskCounts->get('done', 0),
-                'overdue' => Task::query()
-                    ->where('project_id', $project->id)
+                'overdue' => $tasks()
                     ->whereNotIn('status', ['done', 'cancelled'])
                     ->whereNotNull('due_date')
                     ->whereDate('due_date', '<', today())
                     ->count(),
-                'upcoming' => Task::query()
-                    ->where('project_id', $project->id)
+                'upcoming' => $tasks()
                     ->whereNotIn('status', ['done', 'cancelled'])
                     ->whereBetween('due_date', [today(), today()->addDays(7)])
                     ->count(),
             ],
-            'tasks' => Task::query()
-                ->where('project_id', $project->id)
+            'tasks' => $tasks()
                 ->whereNotIn('status', ['done', 'cancelled'])
                 ->orderByRaw('due_date is null')
                 ->orderBy('due_date')
                 ->limit(30)
                 ->get(['title', 'description', 'status', 'priority', 'due_date', 'estimated_minutes'])
                 ->toArray(),
-            'overdue_tasks' => Task::query()
-                ->where('project_id', $project->id)
+            'overdue_tasks' => $tasks()
                 ->whereNotIn('status', ['done', 'cancelled'])
                 ->whereNotNull('due_date')
                 ->whereDate('due_date', '<', today())
@@ -191,8 +189,7 @@ class AiAssistantController extends ApiController
                 ->limit(8)
                 ->get(['title', 'status', 'priority', 'due_date'])
                 ->toArray(),
-            'upcoming_tasks' => Task::query()
-                ->where('project_id', $project->id)
+            'upcoming_tasks' => $tasks()
                 ->whereNotIn('status', ['done', 'cancelled'])
                 ->whereBetween('due_date', [today(), today()->addDays(7)])
                 ->orderBy('due_date')

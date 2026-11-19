@@ -23,25 +23,25 @@
             <a class="nav-link" data-nav="dashboard" href="/dashboard"><i class="bi bi-speedometer2"></i> Tableau de bord</a>
 
             <div class="nav-section">Projets</div>
-            <a class="nav-link" data-nav="categories" href="/categories"><i class="bi bi-grid-1x2"></i> Catégories</a>
+            <a class="nav-link" data-nav="categories" data-roles="admin,project_manager,member" href="/categories"><i class="bi bi-grid-1x2"></i> Catégories</a>
             <a class="nav-link" data-nav="projects" href="/projects"><i class="bi bi-kanban"></i> Tous les projets</a>
             <a class="nav-link" data-nav="tasks" href="/tasks"><i class="bi bi-check2-square"></i> Mes tâches</a>
             <a class="nav-link" data-nav="agenda" href="/agenda"><i class="bi bi-calendar3"></i> Agenda</a>
-            <a class="nav-link" data-nav="planning" data-roles="admin,project_manager,member" href="/planning"><i class="bi bi-calendar2-week"></i> Planning</a>
+            <a class="nav-link" data-nav="planning" data-roles="admin,project_manager,member,guest" href="/planning"><i class="bi bi-calendar2-week"></i> Planning</a>
 
-            <div class="nav-section" data-roles="admin,project_manager,member">Assistant</div>
-            <a class="nav-link" data-nav="assistant" data-roles="admin,project_manager,member" href="/assistant"><i class="bi bi-stars"></i> Assistant Yobel</a>
+            <div class="nav-section" data-roles="admin,project_manager,member,guest">Assistant</div>
+            <a class="nav-link" data-nav="assistant" data-roles="admin,project_manager,member,guest" href="/assistant"><i class="bi bi-stars"></i> Assistant Yobel</a>
 
             <div class="nav-section">Compte</div>
             <a class="nav-link" data-nav="profile" href="/profile"><i class="bi bi-person"></i> Mon profil</a>
             <a class="nav-link" data-nav="notifications" href="/notifications"><i class="bi bi-bell"></i> Notifications</a>
             <a class="nav-link" data-nav="settings" href="/settings"><i class="bi bi-bell"></i> Préférences</a>
 
-            <div class="nav-section" data-roles="admin,project_manager,member">Collaboration</div>
+            <div class="nav-section" data-roles="admin,project_manager,member,guest">Collaboration</div>
             <a class="nav-link" data-nav="space" data-roles="admin,project_manager,member" href="/space"><i class="bi bi-chat-square-text"></i> Espace général</a>
-            <a class="nav-link" data-nav="decisions" data-roles="admin,project_manager,member" href="/decisions"><i class="bi bi-journal-check"></i> Décisions générales</a>
-            <a class="nav-link" data-nav="meeting-minutes" data-roles="admin,project_manager,member" href="/meeting-minutes"><i class="bi bi-journal-text"></i> Comptes rendus</a>
-            <a class="nav-link" data-nav="evaluation" data-roles="admin,project_manager" href="/evaluation"><i class="bi bi-bar-chart-steps"></i> Évaluation</a>
+            <a class="nav-link" data-nav="decisions" data-roles="admin,project_manager,member,guest" href="/decisions"><i class="bi bi-journal-check"></i> Décisions</a>
+            <a class="nav-link" data-nav="meeting-minutes" data-roles="admin,project_manager,member,guest" href="/meeting-minutes"><i class="bi bi-journal-text"></i> Comptes rendus</a>
+            <a class="nav-link" data-nav="evaluation" data-roles="admin,project_manager,guest" href="/evaluation"><i class="bi bi-bar-chart-steps"></i> Évaluation</a>
 
             <div class="nav-section" data-roles="admin,project_manager">Administration</div>
             <a class="nav-link" data-nav="users" data-roles="admin,project_manager" href="/users"><i class="bi bi-people"></i> Utilisateurs</a>

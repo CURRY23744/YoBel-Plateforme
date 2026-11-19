@@ -24,9 +24,12 @@ class DashboardController extends ApiController
             'role' => $me->role->value,
             'projects_by_status' => (clone $visible)->select('status', DB::raw('count(*) as total'))->groupBy('status')->pluck('total', 'status'),
             'overdue_projects' => (clone $visible)->overdue()->with('type:id,name,color')->orderBy('planned_end_date')->limit(10)->get(['id', 'reference', 'name', 'planned_end_date', 'status', 'project_type_id']),
-            'my_tasks' => Task::where('assignee_id', $me->id)->whereNotIn('status', ['done', 'cancelled'])
+            'my_tasks' => Task::where('assignee_id', $me->id)
+                ->when($me->isGuest(), fn ($q) => $q->whereIn('project_id', $projectIds))
+                ->whereNotIn('status', ['done', 'cancelled'])
                 ->orderByRaw('due_date is null')->orderBy('due_date')->limit(10)->get(['id', 'title', 'status', 'priority', 'due_date', 'project_id']),
             'upcoming_events' => Event::query()
+                ->when($me->isGuest(), fn ($q) => $q->whereIn('project_id', $projectIds))
                 ->where(fn ($w) => $w->where('created_by', $me->id)->orWhereHas('participants', fn ($p) => $p->where('users.id', $me->id)))
                 ->where('starts_at', '>=', now())->orderBy('starts_at')->limit(10)->get(['id', 'title', 'type', 'starts_at', 'project_id']),
             'upcoming_milestones' => Milestone::whereIn('project_id', $projectIds)->whereNull('completed_at')

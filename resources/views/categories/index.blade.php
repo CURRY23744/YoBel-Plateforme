@@ -2,6 +2,7 @@
 
 @section('title', 'Catégories et référentiels')
 @section('nav', 'categories')
+@section('page-roles', 'admin,project_manager,member')
 
 @section('content')
     <div class="page-head">

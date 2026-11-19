@@ -2,7 +2,7 @@
 
 @section('title', request()->routeIs('decisions') ? 'Décisions générales' : 'Comptes rendus généraux')
 @section('nav', request()->routeIs('decisions') ? 'decisions' : 'meeting-minutes')
-@section('page-roles', 'admin,project_manager,member')
+@section('page-roles', 'admin,project_manager,member,guest')
 
 @section('content')
     @php($isDecisionRegister = request()->routeIs('decisions'))

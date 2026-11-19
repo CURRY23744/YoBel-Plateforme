@@ -57,7 +57,7 @@
     $('#restoreProject')?.addEventListener('click', restoreProject);
     $('#duplicateProject')?.addEventListener('click', duplicateProject);
     $('#deleteProject')?.addEventListener('click', deleteProject);
-    if (currentUser.role !== 'admin' && currentUser.role !== 'project_manager') {
+    if (!['admin', 'project_manager', 'guest'].includes(currentUser.role)) {
       $('[data-project-tab="evaluation"]')?.closest('li')?.remove();
     }
   }
@@ -1292,7 +1292,7 @@
       <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div><h2 class="h5 mb-0">Évaluation du projet</h2><div class="small text-muted">Score de priorité calculé à partir des critères actifs.</div></div>
         ${hasScore ? `<span class="badge-soft bs-validated fs-6">Score : ${esc(data.priority_score)} / 100</span>` : '<span class="badge-soft bs-idea">Non évalué</span>'}
-        ${rows.length ? '<button type="button" class="btn btn-primary btn-sm" id="scoreProject"><i class="bi bi-ui-checks me-1"></i>Évaluer</button>' : ''}
+        ${rows.length && ['admin', 'project_manager'].includes(currentUser.role) ? '<button type="button" class="btn btn-primary btn-sm" id="scoreProject"><i class="bi bi-ui-checks me-1"></i>Évaluer</button>' : ''}
       </div>
       ${rows.length ? `<div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>Critère</th><th>Moyenne</th><th>Évaluations</th></tr></thead><tbody>
         ${rows.map((row) => `<tr>

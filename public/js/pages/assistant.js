@@ -85,8 +85,9 @@
     }
   }
 
-  async function loadProjects() {
+  async function loadProjects(user) {
     const result = await api('projects', { params: { per_page: 100, sort: 'name', direction: 'asc' } });
+    const projects = result.data || [];
     (result.data || []).forEach((project) => {
       const option = document.createElement('option');
       option.value = project.id;
@@ -95,9 +96,23 @@
     });
 
     const requestedProject = qs('project_id');
-    if (requestedProject && (result.data || []).some((project) => String(project.id) === requestedProject)) {
+    if (requestedProject && projects.some((project) => String(project.id) === requestedProject)) {
       projectSelect.value = requestedProject;
       projectId = requestedProject;
+    }
+
+    if (user.role === 'guest') {
+      projectSelect.querySelector('option[value=""]')?.remove();
+      projectSelect.required = true;
+      if (!projectId && projects.length) {
+        projectId = String(projects[0].id);
+        projectSelect.value = projectId;
+      }
+      if (!projects.length) {
+        $('#assistantError').textContent = 'Aucun projet ne vous est attribué. Contactez un administrateur pour obtenir un accès.';
+        $('#assistantError').classList.remove('d-none');
+        $('#assistantSend').disabled = true;
+      }
     }
   }
 
@@ -141,15 +156,15 @@
     }
   }
 
-  ready(async () => {
+  ready(async (user) => {
     try {
-      await loadProjects();
+      await loadProjects(user);
       projectSelect.addEventListener('change', () => {
         projectId = projectSelect.value;
         loadHistory();
       });
       $('#assistantForm').addEventListener('submit', sendPrompt);
-      await loadHistory();
+      if (user.role !== 'guest' || projectId) await loadHistory();
     } catch (error) {
       $('#assistantError').textContent = error.message || 'Impossible d’initialiser Yobel.';
       $('#assistantError').classList.remove('d-none');

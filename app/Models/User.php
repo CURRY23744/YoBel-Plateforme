@@ -123,8 +123,8 @@ class User extends Authenticatable
             return true;
         }
 
-        // Un invité reste en lecture seule, quels que soient les droits enregistrés.
-        if ($this->isGuest() && $ability !== 'view') {
+        // Les invités peuvent consulter et participer aux discussions de leurs projets.
+        if ($this->isGuest() && ! in_array($ability, ['view', 'comment'], true)) {
             return false;
         }
 

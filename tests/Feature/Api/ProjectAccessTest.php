@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Models\Organization;
+use App\Models\Task;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\CreatesTenants;
 use Tests\TestCase;
@@ -52,16 +53,30 @@ class ProjectAccessTest extends TestCase
         $this->assertSame([$mine->id], collect($this->getJson('/api/projects')->json('data'))->pluck('id')->all());
     }
 
-    public function test_guest_stays_read_only_even_with_editor_rights(): void
+    public function test_guest_can_access_project_and_discussions_but_not_project_management(): void
     {
         $project = $this->makeProject();
         $guest = $this->makeUser('guest');
         $this->addMember($project, $guest, 'manager');
+        $assigned = Task::create([
+            'project_id' => $project->id,
+            'organization_id' => $this->org->id,
+            'title' => 'Tâche confiée',
+            'assignee_id' => $guest->id,
+        ]);
+        $unassigned = Task::create([
+            'project_id' => $project->id,
+            'organization_id' => $this->org->id,
+            'title' => 'Tâche interne',
+        ]);
         $this->actingAsUser($guest);
 
         $this->getJson("/api/projects/{$project->id}")->assertOk();
         $this->putJson("/api/projects/{$project->id}", ['name' => 'X'])->assertForbidden();
-        $this->postJson("/api/projects/{$project->id}/discussions", ['title' => 'Salut'])->assertForbidden();
+        $discussionId = $this->postJson("/api/projects/{$project->id}/discussions", ['title' => 'Salut'])->assertCreated()->json('id');
+        $this->postJson("/api/discussions/{$discussionId}/messages", ['body' => 'Bonjour'])->assertCreated();
+        $this->getJson('/api/tasks')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $assigned->id);
+        $this->getJson("/api/tasks/{$unassigned->id}")->assertNotFound();
         $this->getJson('/api/discussions')->assertForbidden();
     }
 

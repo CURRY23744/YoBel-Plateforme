@@ -28,11 +28,14 @@ class TaskController extends ApiController
 
         $tasks = Task::query()
             ->where(function ($w) use ($projectIds, $me) {
-                $w->whereIn('project_id', $projectIds)
-                    ->orWhere(fn ($g) => $g->whereNull('project_id')->where(fn ($h) => $h->where('assignee_id', $me->id)->orWhere('created_by', $me->id)));
+                $w->whereIn('project_id', $projectIds);
+                if (! $me->isGuest()) {
+                    $w->orWhere(fn ($g) => $g->whereNull('project_id')->where(fn ($h) => $h->where('assignee_id', $me->id)->orWhere('created_by', $me->id)));
+                }
             })
+            ->when($me->isGuest(), fn ($q) => $q->where('assignee_id', $me->id))
             ->when($request->filled('project_id'), fn ($q) => $q->where('project_id', $request->query('project_id')))
-            ->when($request->filled('assignee_id'), fn ($q) => $q->where('assignee_id', $request->query('assignee_id') === 'me' ? $me->id : $request->query('assignee_id')))
+            ->when(! $me->isGuest() && $request->filled('assignee_id'), fn ($q) => $q->where('assignee_id', $request->query('assignee_id') === 'me' ? $me->id : $request->query('assignee_id')))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
             ->when($request->filled('priority'), fn ($q) => $q->where('priority', $request->query('priority')))
             ->when($request->filled('due_before'), fn ($q) => $q->whereDate('due_date', '<=', $request->query('due_before')))
@@ -95,7 +98,12 @@ class TaskController extends ApiController
     public function show(Task $task): JsonResponse
     {
         $this->authorizeTask($task);
-        $task->load(['assignee:id,first_name,last_name', 'creator:id,first_name,last_name', 'project:id,organization_id,reference,name', 'subtasks']);
+        $task->load([
+            'assignee:id,first_name,last_name',
+            'creator:id,first_name,last_name',
+            'project:id,organization_id,reference,name',
+            'subtasks' => fn ($query) => $query->when($this->me()->isGuest(), fn ($q) => $q->where('assignee_id', $this->me()->id)),
+        ]);
 
         return response()->json($task);
     }
@@ -158,6 +166,7 @@ class TaskController extends ApiController
         if ($task->project_id) {
             abort_unless($task->project, 404);
             $this->authorizeProject($task->project);
+            abort_if($me->isGuest() && (int) $task->assignee_id !== (int) $me->id, 404);
         } else {
             abort_unless($task->created_by === $me->id || $task->assignee_id === $me->id || $me->isStaff(), 404);
         }

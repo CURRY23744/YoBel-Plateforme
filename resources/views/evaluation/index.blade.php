@@ -2,7 +2,7 @@
 
 @section('title', 'Évaluation des projets')
 @section('nav', 'evaluation')
-@section('page-roles', 'admin,project_manager')
+@section('page-roles', 'admin,project_manager,guest')
 
 @section('content')
     <div class="page-head">

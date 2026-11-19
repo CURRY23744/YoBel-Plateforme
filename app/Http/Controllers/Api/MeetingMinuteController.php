@@ -15,6 +15,8 @@ class MeetingMinuteController extends ApiController
         if ($project) {
             $this->authorizeProject($project);
             $query = MeetingMinute::where('project_id', $project->id);
+        } elseif ($this->me()->isGuest()) {
+            $query = MeetingMinute::whereIn('project_id', Project::visibleTo($this->me())->select('projects.id'));
         } else {
             $this->authorizeGeneral();
             $query = MeetingMinute::whereNull('project_id');

@@ -18,6 +18,8 @@ class DecisionController extends ApiController
         if ($project) {
             $this->authorizeProject($project);
             $query = Decision::where('project_id', $project->id);
+        } elseif ($this->me()->isGuest()) {
+            $query = Decision::whereIn('project_id', Project::visibleTo($this->me())->select('projects.id'));
         } else {
             $this->authorizeGeneral();
             $query = Decision::whereNull('project_id');

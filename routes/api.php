@@ -54,7 +54,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     Route::get('dashboard', [DashboardController::class, 'index']);
     Route::get('search', [SearchController::class, 'index']);
-    Route::middleware('role:admin,project_manager,member')->prefix('ai')->group(function () {
+    Route::middleware('role:admin,project_manager,member,guest')->prefix('ai')->group(function () {
         Route::get('interactions', [AiAssistantController::class, 'index']);
         Route::post('ask', [AiAssistantController::class, 'ask'])->middleware('throttle:20,1');
         Route::post('suggestions/{suggestion}/review', [AiAssistantController::class, 'reviewSuggestion']);
@@ -183,8 +183,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::post('events/{event}/respond', [EventController::class, 'respond']);
 
     // Planning
-    Route::get('planning', [PlanningController::class, 'index'])->middleware('role:admin,project_manager,member');
-    Route::put('planning', [PlanningController::class, 'update'])->middleware('role:admin,project_manager,member');
+    Route::get('planning', [PlanningController::class, 'index'])->middleware('role:admin,project_manager,member,guest');
+    Route::put('planning', [PlanningController::class, 'update'])->middleware('role:admin,project_manager,member,guest');
 
     // Annonces
     Route::get('announcements', [AnnouncementController::class, 'index']);

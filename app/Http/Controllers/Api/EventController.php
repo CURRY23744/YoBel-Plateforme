@@ -25,6 +25,16 @@ class EventController extends ApiController
 
         $events = Event::query()
             ->where(function ($w) use ($me, $projectIds) {
+                if ($me->isGuest()) {
+                    $w->whereIn('project_id', $projectIds)
+                        ->where(fn ($projectEvents) => $projectEvents
+                            ->where('created_by', $me->id)
+                            ->orWhereHas('participants', fn ($p) => $p->where('users.id', $me->id))
+                            ->orWhereIn('visibility', ['project', 'organization']));
+
+                    return;
+                }
+
                 $w->where('created_by', $me->id)
                     ->orWhereHas('participants', fn ($p) => $p->where('users.id', $me->id))
                     ->orWhere(fn ($g) => $g->whereIn('project_id', $projectIds)->whereIn('visibility', ['project', 'organization']))
@@ -100,6 +110,9 @@ class EventController extends ApiController
 
     public function show(Event $event): JsonResponse
     {
+        if ($this->me()->isGuest()) {
+            abort_unless($event->project_id && $this->me()->canOnProject($event->project, 'view'), 404);
+        }
         $this->authorizeEvent($event);
 
         return response()->json($event->load(['participants:id,first_name,last_name', 'project:id,reference,name', 'creator:id,first_name,last_name']));
@@ -142,6 +155,7 @@ class EventController extends ApiController
 
     public function respond(Request $request, Event $event): JsonResponse
     {
+        $this->authorizeEvent($event);
         $data = $request->validate(['response_status' => 'required|in:accepted,declined,tentative']);
 
         $updated = $event->participants()->updateExistingPivot($this->me()->id, [
@@ -159,6 +173,9 @@ class EventController extends ApiController
     private function authorizeEvent(Event $event, bool $write = false): void
     {
         $me = $this->me();
+        if ($me->isGuest()) {
+            abort_unless($event->project_id && $me->canOnProject($event->project, 'view'), 404);
+        }
         $isCreator = $event->created_by === $me->id;
         $isParticipant = $event->participants()->where('users.id', $me->id)->exists();
 

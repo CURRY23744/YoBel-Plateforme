@@ -106,7 +106,7 @@ class MessageController extends ApiController
         }
 
         try {
-            Notifier::discussionMessage($discussion, $me, $message, $mentionedUsers->modelKeys());
+            Notifier::discussionMessage($discussion, $me, $message, $mentionedUsers->pluck('id')->all());
         } catch (\Throwable $exception) {
             $notificationFailed = true;
             Log::error('Could not send discussion reply notifications.', [

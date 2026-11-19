@@ -295,6 +295,24 @@
 
         bindRules();
 
+        const currentPasswordGroup = $('#currentPasswordGroup');
+        const currentPasswordInput = $('#current_password');
+        const submitButton = $('#changeForm [type="submit"]');
+        submitButton.disabled = true;
+
+        api('auth/me').then((user) => {
+            const mustChangePassword = Boolean(user.must_change_password);
+            currentPasswordGroup.hidden = mustChangePassword;
+            currentPasswordInput.disabled = mustChangePassword;
+            currentPasswordInput.required = !mustChangePassword;
+            $('#changePasswordIntro').textContent = mustChangePassword
+                ? 'Choisissez un mot de passe personnel pour sécuriser votre compte.'
+                : 'Saisissez votre mot de passe actuel, puis choisissez-en un nouveau.';
+            submitButton.disabled = false;
+        }).catch((error) => {
+            alertBox(error.message || 'Impossible de vérifier votre compte.');
+        });
+
         const logoutLink = $('#logoutLink');
 
         if (logoutLink) {
