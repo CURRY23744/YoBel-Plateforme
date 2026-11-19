@@ -10,6 +10,7 @@ use App\Support\Notifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -86,16 +87,41 @@ class MessageController extends ApiController
             return $message;
         });
 
-        Notifier::send(
-            $mentionedUsers,
-            'message.mention',
-            "{$me->name} vous a mentionné dans « {$discussion->title} »",
-            Str::limit($message->body, 140),
-            ['project_id' => $discussion->project_id, 'discussion_id' => $discussion->id, 'message_id' => $message->id]
-        );
-        Notifier::discussionMessage($discussion, $me, $message, $mentionedUsers->modelKeys());
+        $notificationFailed = false;
+        try {
+            Notifier::send(
+                $mentionedUsers,
+                'message.mention',
+                "{$me->name} vous a mentionné dans « {$discussion->title} »",
+                Str::limit($message->body, 140),
+                ['project_id' => $discussion->project_id, 'discussion_id' => $discussion->id, 'message_id' => $message->id]
+            );
+        } catch (\Throwable $exception) {
+            $notificationFailed = true;
+            Log::error('Could not send discussion mention notifications.', [
+                'discussion_id' => $discussion->id,
+                'message_id' => $message->id,
+                'exception' => $exception,
+            ]);
+        }
 
-        return response()->json($message->load(['user:id,first_name,last_name', 'attachments', 'mentions:id,first_name,last_name']), 201);
+        try {
+            Notifier::discussionMessage($discussion, $me, $message, $mentionedUsers->modelKeys());
+        } catch (\Throwable $exception) {
+            $notificationFailed = true;
+            Log::error('Could not send discussion reply notifications.', [
+                'discussion_id' => $discussion->id,
+                'message_id' => $message->id,
+                'exception' => $exception,
+            ]);
+        }
+
+        $response = $message->load(['user:id,first_name,last_name', 'attachments', 'mentions:id,first_name,last_name']);
+        if ($notificationFailed) {
+            $response->setAttribute('notification_warning', true);
+        }
+
+        return response()->json($response, 201);
     }
 
     public function update(Request $request, Message $message): JsonResponse

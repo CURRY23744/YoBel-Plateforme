@@ -1037,8 +1037,18 @@
           appendProjectChatMessages(messageContainer, [message], true);
           latestMessageId = Math.max(latestMessageId, Number(message.id) || 0);
           messageForm.reset();
-          $('#projectChatSyncStatus', handle.el).textContent = 'Message envoyé.';
-          await loadDiscussions(discussionPage);
+          $('#projectChatSyncStatus', handle.el).textContent = message.notification_warning
+            ? 'Message envoyé, mais les notifications n’ont pas pu être envoyées.'
+            : 'Message envoyé.';
+          if (message.notification_warning) {
+            toast('Message envoyé, mais les notifications associées n’ont pas pu être envoyées.', 'warning');
+          }
+          try {
+            await loadDiscussions(discussionPage);
+          } catch (error) {
+            $('#projectChatSyncStatus', handle.el).textContent = 'Message envoyé, mais la liste des discussions n’a pas pu être actualisée.';
+            toast(`Message envoyé, mais la liste des discussions n’a pas pu être actualisée : ${error.message}`, 'warning');
+          }
         } catch (error) {
           fail(error);
         } finally {
