@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\User;
+use App\Notifications\AppNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -138,6 +139,12 @@ class AuthController extends ApiController
         $current = $user->currentAccessToken();
         $user->tokens()->when($current && isset($current->id), fn ($q) => $q->where('id', '!=', $current->id))->delete();
 
+        $user->notify(new AppNotification([
+            'type' => 'password.changed',
+            'title' => 'Mot de passe modifié',
+            'body' => 'Votre mot de passe a été modifié avec succès.',
+        ]));
+
         return response()->json(['message' => 'Mot de passe mis à jour.']);
     }
 
@@ -170,6 +177,11 @@ class AuthController extends ApiController
                     'locked_until' => null,
                 ])->save();
                 $user->tokens()->delete();
+                $user->notify(new AppNotification([
+                    'type' => 'password.reset',
+                    'title' => 'Mot de passe réinitialisé',
+                    'body' => 'Votre mot de passe a été réinitialisé. Si vous n’avez pas effectué cette action, contactez immédiatement un administrateur.',
+                ]));
             }
         );
 
