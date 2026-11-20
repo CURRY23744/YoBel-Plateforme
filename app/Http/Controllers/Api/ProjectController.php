@@ -7,6 +7,7 @@ use App\Enums\ProjectStatus;
 use App\Models\Folder;
 use App\Models\Project;
 use App\Models\ProjectMember;
+use App\Models\User;
 use App\Support\Notifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -120,6 +121,12 @@ class ProjectController extends ApiController
                         ->where('is_active', true),
                 ],
             ])['access_user_ids'] ?? [];
+
+            $guestHasProject = User::whereIn('id', $accessUserIds)
+                ->where('role', 'guest')
+                ->whereHas('memberships', fn ($query) => $query->whereNull('left_at'))
+                ->exists();
+            abort_if($guestHasProject, 422, 'Un invité ne peut avoir accès qu’à un seul projet.');
         }
 
         if (empty($data['manager_id']) && $me->isManager()) {

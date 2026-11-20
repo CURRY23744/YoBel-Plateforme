@@ -57,7 +57,7 @@ class UserController extends ApiController
                 'integer',
                 Rule::exists('projects', 'id')->where('organization_id', $organizationId),
             ],
-            'task_ids' => ['prohibited_unless:role,guest', 'array'],
+            'task_ids' => ['required_if:role,guest', 'prohibited_unless:role,guest', 'array', 'min:1'],
             'task_ids.*' => [
                 'required',
                 'integer',
@@ -138,10 +138,11 @@ class UserController extends ApiController
             return response()->json(['message' => 'Vous ne pouvez pas modifier votre propre rôle.'], 422);
         }
 
-        if (($data['role'] ?? null) === Role::Guest->value && ! $user->memberships()->whereNull('left_at')->where('can_view', true)->exists()) {
+        if (($data['role'] ?? null) === Role::Guest->value
+            && $user->memberships()->whereNull('left_at')->where('can_view', true)->count() !== 1) {
             return response()->json([
-                'message' => 'Un invité doit être affecté à au moins un projet.',
-                'errors' => ['role' => ['Affectez cet utilisateur à un projet avant de lui attribuer le rôle invité.']],
+                'message' => 'Un invité doit être affecté à un seul projet.',
+                'errors' => ['role' => ['Affectez cet utilisateur à un seul projet avant de lui attribuer le rôle invité.']],
             ], 422);
         }
 

@@ -168,6 +168,7 @@ class TaskController extends ApiController
             $this->authorizeProject($task->project);
             abort_if($me->isGuest() && (int) $task->assignee_id !== (int) $me->id, 404);
         } else {
+            abort_if($me->isGuest(), 404);
             abort_unless($task->created_by === $me->id || $task->assignee_id === $me->id || $me->isStaff(), 404);
         }
     }

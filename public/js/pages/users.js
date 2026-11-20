@@ -94,7 +94,7 @@
       ${isEdit ? '' : `<div class="col-12 d-none" id="guestAssignmentFields">
         <div class="row g-3">
           ${field({ name: 'project_id', label: 'Projet autorisé', type: 'select', required: true, blank: 'Choisir un projet', options: [] })}
-          ${field({ name: 'task_ids', label: 'Tâches confiées', type: 'select', multiple: true, size: 6, options: [], help: 'L’invité ne verra que les tâches sélectionnées et les informations de ce projet.' })}
+          ${field({ name: 'task_ids', label: 'Tâches confiées', type: 'select', multiple: true, required: true, size: 6, options: [], help: 'L’invité ne verra que les tâches sélectionnées et les informations de ce projet.' })}
           <div class="col-12"><div class="small text-muted" id="guestAssignmentStatus">Choisissez le projet de collaboration de cet invité.</div></div>
         </div>
       </div>`}
@@ -116,9 +116,15 @@
       projectSelect.disabled = !isGuest;
       projectSelect.required = isGuest;
       taskSelect.disabled = !isGuest || !projectSelect.value;
+      taskSelect.required = isGuest && Boolean(projectSelect.value);
     };
 
-    role.addEventListener('change', updateVisibility);
+    role.addEventListener('change', () => {
+      updateVisibility();
+      if (role.value === 'guest' && projectSelect.value) {
+        projectSelect.dispatchEvent(new Event('change'));
+      }
+    });
     projectSelect.addEventListener('change', async () => {
       taskSelect.innerHTML = '';
       taskSelect.disabled = !projectSelect.value || role.value !== 'guest';
@@ -164,12 +170,10 @@
       });
       if (!projects.length) {
         status.textContent = 'Créez un projet avant d’ajouter un invité.';
-        $('[value="guest"]', role).disabled = true;
       }
     } catch (error) {
       fail(error);
       status.textContent = 'Impossible de charger les projets disponibles.';
-      $('[value="guest"]', role).disabled = true;
     }
   }
 
