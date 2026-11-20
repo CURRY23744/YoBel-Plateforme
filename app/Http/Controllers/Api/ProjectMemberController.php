@@ -32,12 +32,6 @@ class ProjectMemberController extends ApiController
 
         $data = $request->validate($this->rules());
         $user = User::where('organization_id', $project->organization_id)->where('is_active', true)->findOrFail($data['user_id']);
-        abort_if(
-            $user->isGuest() && $user->memberships()->whereNull('left_at')->where('project_id', '!=', $project->id)->exists(),
-            422,
-            'Un invité ne peut avoir accès qu’à un seul projet.'
-        );
-
         $member = ProjectMember::firstOrNew(['project_id' => $project->id, 'user_id' => $user->id]);
         $wasActive = $member->exists && $member->left_at === null;
 
@@ -102,12 +96,6 @@ class ProjectMemberController extends ApiController
         ]);
 
         $selectedIds = array_map('intval', $data['user_ids']);
-        $guestHasOtherProject = User::whereIn('id', $selectedIds)
-            ->where('role', 'guest')
-            ->whereHas('memberships', fn ($query) => $query->whereNull('left_at')->where('project_id', '!=', $project->id))
-            ->exists();
-        abort_if($guestHasOtherProject, 422, 'Un invité ne peut avoir accès qu’à un seul projet.');
-
         DB::transaction(function () use ($project, $selectedIds) {
             $now = now();
 

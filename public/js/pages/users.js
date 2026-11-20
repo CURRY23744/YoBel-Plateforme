@@ -93,9 +93,9 @@
       ${field({ name: 'employee_number', label: 'Matricule', value: person?.employee_number || '', col: 'col-md-6' })}
       ${isEdit ? '' : `<div class="col-12 d-none" id="guestAssignmentFields">
         <div class="row g-3">
-          ${field({ name: 'project_id', label: 'Projet autorisé', type: 'select', required: true, blank: 'Choisir un projet', options: [] })}
-          ${field({ name: 'task_ids', label: 'Tâches confiées', type: 'select', multiple: true, required: true, size: 6, options: [], help: 'L’invité ne verra que les tâches sélectionnées et les informations de ce projet.' })}
-          <div class="col-12"><div class="small text-muted" id="guestAssignmentStatus">Choisissez le projet de collaboration de cet invité.</div></div>
+          ${field({ name: 'project_ids', label: 'Projets autorisés', type: 'select', multiple: true, required: true, size: 6, options: [], help: 'Vous pouvez sélectionner plusieurs projets.' })}
+          ${field({ name: 'task_ids', label: 'Tâches confiées', type: 'select', multiple: true, size: 6, options: [], help: 'Sélection facultative : l’invité pourra accéder aux projets sélectionnés.' })}
+          <div class="col-12"><div class="small text-muted" id="guestAssignmentStatus">Choisissez un ou plusieurs projets de collaboration pour cet invité.</div></div>
         </div>
       </div>`}
       ${isEdit ? '' : '<div class="col-12"><div class="alert alert-info mb-0 small">Un mot de passe temporaire sera généré. L’utilisateur devra le changer à sa première connexion.</div></div>'}
@@ -107,39 +107,43 @@
     const section = $('#guestAssignmentFields', form);
     if (!section) return;
 
-    const projectSelect = $('[name="project_id"]', form);
+    const projectSelect = $('[name="project_ids"]', form);
     const taskSelect = $('[name="task_ids"]', form);
     const status = $('#guestAssignmentStatus', form);
+    const selectedProjectIds = () => Array.from(projectSelect.selectedOptions).map((option) => option.value);
     const updateVisibility = () => {
       const isGuest = role.value === 'guest';
       section.classList.toggle('d-none', !isGuest);
       projectSelect.disabled = !isGuest;
       projectSelect.required = isGuest;
-      taskSelect.disabled = !isGuest || !projectSelect.value;
-      taskSelect.required = isGuest && Boolean(projectSelect.value);
+      taskSelect.disabled = !isGuest || selectedProjectIds().length === 0;
     };
 
     role.addEventListener('change', () => {
       updateVisibility();
-      if (role.value === 'guest' && projectSelect.value) {
+      if (role.value === 'guest' && selectedProjectIds().length) {
         projectSelect.dispatchEvent(new Event('change'));
       }
     });
     projectSelect.addEventListener('change', async () => {
       taskSelect.innerHTML = '';
-      taskSelect.disabled = !projectSelect.value || role.value !== 'guest';
-      if (!projectSelect.value) {
-        status.textContent = 'Choisissez le projet de collaboration de cet invité.';
+      const projectIds = selectedProjectIds();
+      taskSelect.disabled = !projectIds.length || role.value !== 'guest';
+      if (!projectIds.length) {
+        status.textContent = 'Choisissez un ou plusieurs projets de collaboration pour cet invité.';
         return;
       }
 
-      status.textContent = 'Chargement des tâches du projet…';
+      status.textContent = 'Chargement des tâches des projets sélectionnés…';
       try {
-        let result = await api('tasks', { params: { project_id: projectSelect.value, page: 1, per_page: 100 } });
-        const tasks = [...(result.data || [])];
-        for (let pageNumber = 2; pageNumber <= result.last_page; pageNumber++) {
-          result = await api('tasks', { params: { project_id: projectSelect.value, page: pageNumber, per_page: 100 } });
+        const tasks = [];
+        for (const projectId of projectIds) {
+          let result = await api('tasks', { params: { project_id: projectId, page: 1, per_page: 100 } });
           tasks.push(...(result.data || []));
+          for (let pageNumber = 2; pageNumber <= result.last_page; pageNumber++) {
+            result = await api('tasks', { params: { project_id: projectId, page: pageNumber, per_page: 100 } });
+            tasks.push(...(result.data || []));
+          }
         }
 
         taskSelect.innerHTML = tasks.map((task) => {
@@ -149,10 +153,10 @@
           return option.outerHTML;
         }).join('');
         status.textContent = tasks.length
-          ? 'Sélectionnez les tâches que l’invité pourra consulter et mettre à jour.'
-          : 'Ce projet ne contient pas encore de tâches à assigner.';
+          ? 'Sélection facultative des tâches que l’invité pourra consulter et mettre à jour.'
+          : 'Les projets sélectionnés ne contiennent pas encore de tâches.';
       } catch (error) {
-        status.textContent = 'Impossible de charger les tâches de ce projet.';
+        status.textContent = 'Impossible de charger les tâches des projets sélectionnés.';
         fail(error);
       }
     });

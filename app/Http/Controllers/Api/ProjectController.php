@@ -121,12 +121,6 @@ class ProjectController extends ApiController
                         ->where('is_active', true),
                 ],
             ])['access_user_ids'] ?? [];
-
-            $guestHasProject = User::whereIn('id', $accessUserIds)
-                ->where('role', 'guest')
-                ->whereHas('memberships', fn ($query) => $query->whereNull('left_at'))
-                ->exists();
-            abort_if($guestHasProject, 422, 'Un invité ne peut avoir accès qu’à un seul projet.');
         }
 
         if (empty($data['manager_id']) && $me->isManager()) {

@@ -46,25 +46,47 @@ class UserController extends ApiController
     public function store(Request $request): JsonResponse
     {
         $organizationId = $this->me()->organization_id;
+        $projectIds = $request->input('project_ids');
+        if (! is_array($projectIds) && $request->filled('project_id')) {
+            $projectIds = [(int) $request->input('project_id')];
+            $request->merge(['project_ids' => $projectIds]);
+        }
+        $projectIds = is_array($projectIds)
+            ? array_values(array_unique(array_map('intval', array_filter($projectIds))))
+            : [];
+
         $data = $request->validate([
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',
             'email' => 'required|email|max:255|unique:users,email',
             'role' => ['required', Rule::enum(Role::class)],
             'project_id' => [
-                'required_if:role,guest',
+                'required_without:project_ids',
                 'prohibited_unless:role,guest',
+                'nullable',
                 'integer',
                 Rule::exists('projects', 'id')->where('organization_id', $organizationId),
             ],
-            'task_ids' => ['required_if:role,guest', 'prohibited_unless:role,guest', 'array', 'min:1'],
+            'project_ids' => [
+                'required_if:role,guest',
+                'prohibited_unless:role,guest',
+                'array',
+                'min:1',
+            ],
+            'project_ids.*' => [
+                'required',
+                'integer',
+                'distinct',
+                Rule::exists('projects', 'id')->where('organization_id', $organizationId),
+            ],
+            'task_ids' => ['prohibited_unless:role,guest', 'nullable', 'array'],
             'task_ids.*' => [
                 'required',
                 'integer',
                 'distinct',
                 Rule::exists('tasks', 'id')
                     ->where('organization_id', $organizationId)
-                    ->where('project_id', $request->input('project_id')),
+                    ->whereIn('project_id', $projectIds),
             ],
             'phone' => 'nullable|string|max:30',
             'job_title' => 'nullable|string|max:150',
@@ -75,11 +97,12 @@ class UserController extends ApiController
         $temporary = Str::password(12, symbols: false);
 
         $projectId = $data['project_id'] ?? null;
+        $projectIds = $projectIds ?: ($projectId ? [(int) $projectId] : []);
         $taskIds = $data['task_ids'] ?? [];
-        unset($data['project_id'], $data['task_ids']);
+        unset($data['project_id'], $data['project_ids'], $data['task_ids']);
         $createdBy = $this->me();
 
-        $user = DB::transaction(function () use ($data, $temporary, $projectId, $taskIds, $createdBy, $organizationId) {
+        $user = DB::transaction(function () use ($data, $temporary, $projectIds, $taskIds, $createdBy, $organizationId) {
             $user = User::create($data + [
                 'organization_id' => $organizationId,
                 'password' => $temporary,
@@ -87,7 +110,7 @@ class UserController extends ApiController
                 'created_by' => $createdBy->id,
             ]);
 
-            if ($projectId) {
+            foreach ($projectIds as $projectId) {
                 ProjectMember::updateOrCreate(
                     ['project_id' => $projectId, 'user_id' => $user->id],
                     ProjectMember::PRESETS['contributor'] + [
@@ -97,15 +120,17 @@ class UserController extends ApiController
                         'added_by' => $createdBy->id,
                     ]
                 );
+            }
 
+            if (! empty($taskIds)) {
                 $tasks = Task::query()
-                    ->where('project_id', $projectId)
+                    ->whereIn('project_id', $projectIds)
                     ->whereIn('id', $taskIds)
                     ->get();
                 foreach ($tasks as $task) {
                     $task->update(['assignee_id' => $user->id]);
                     Notifier::send($user, 'task.assigned', "Nouvelle tâche : {$task->title}", null, [
-                        'project_id' => (int) $projectId,
+                        'project_id' => (int) $task->project_id,
                         'task_id' => $task->id,
                     ]);
                 }
@@ -139,10 +164,10 @@ class UserController extends ApiController
         }
 
         if (($data['role'] ?? null) === Role::Guest->value
-            && $user->memberships()->whereNull('left_at')->where('can_view', true)->count() !== 1) {
+            && $user->memberships()->whereNull('left_at')->where('can_view', true)->count() < 1) {
             return response()->json([
-                'message' => 'Un invité doit être affecté à un seul projet.',
-                'errors' => ['role' => ['Affectez cet utilisateur à un seul projet avant de lui attribuer le rôle invité.']],
+                'message' => 'Un invité doit être affecté à au moins un projet.',
+                'errors' => ['role' => ['Affectez cet utilisateur à au moins un projet avant de lui attribuer le rôle invité.']],
             ], 422);
         }
 
