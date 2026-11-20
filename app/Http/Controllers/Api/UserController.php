@@ -61,7 +61,6 @@ class UserController extends ApiController
             'email' => 'required|email|max:255|unique:users,email',
             'role' => ['required', Rule::enum(Role::class)],
             'project_id' => [
-                'required_without:project_ids',
                 'prohibited_unless:role,guest',
                 'nullable',
                 'integer',

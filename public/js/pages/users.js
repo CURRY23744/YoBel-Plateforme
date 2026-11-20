@@ -93,9 +93,13 @@
       ${field({ name: 'employee_number', label: 'Matricule', value: person?.employee_number || '', col: 'col-md-6' })}
       ${isEdit ? '' : `<div class="col-12 d-none" id="guestAssignmentFields">
         <div class="row g-3">
-          ${field({ name: 'project_ids', label: 'Projets autorisés', type: 'select', multiple: true, required: true, size: 6, options: [], help: 'Vous pouvez sélectionner plusieurs projets.' })}
+          <div class="col-12">
+            <label class="form-label">Projets attribués par l’administrateur <span class="text-danger">*</span></label>
+            <div id="guestProjectCheckboxes" class="border rounded p-2" style="max-height: 220px; overflow-y: auto;"><div class="text-muted small">Chargement des projets…</div></div>
+            <div class="form-text">Cochez un ou plusieurs projets à attribuer à cet invité.</div>
+          </div>
           ${field({ name: 'task_ids', label: 'Tâches confiées', type: 'select', multiple: true, size: 6, options: [], help: 'Sélection facultative : l’invité pourra accéder aux projets sélectionnés.' })}
-          <div class="col-12"><div class="small text-muted" id="guestAssignmentStatus">Choisissez un ou plusieurs projets de collaboration pour cet invité.</div></div>
+          <div class="col-12"><div class="small text-muted" id="guestAssignmentStatus">L’administrateur attribue un ou plusieurs projets à cet invité.</div></div>
         </div>
       </div>`}
       ${isEdit ? '' : '<div class="col-12"><div class="alert alert-info mb-0 small">Un mot de passe temporaire sera généré. L’utilisateur devra le changer à sa première connexion.</div></div>'}
@@ -107,30 +111,29 @@
     const section = $('#guestAssignmentFields', form);
     if (!section) return;
 
-    const projectSelect = $('[name="project_ids"]', form);
+    const projectContainer = $('#guestProjectCheckboxes', form);
     const taskSelect = $('[name="task_ids"]', form);
     const status = $('#guestAssignmentStatus', form);
-    const selectedProjectIds = () => Array.from(projectSelect.selectedOptions).map((option) => option.value);
+    const selectedProjectIds = () => Array.from(projectContainer.querySelectorAll('[name="project_ids"]:checked')).map((input) => input.value);
     const updateVisibility = () => {
       const isGuest = role.value === 'guest';
       section.classList.toggle('d-none', !isGuest);
-      projectSelect.disabled = !isGuest;
-      projectSelect.required = isGuest;
+      projectContainer.querySelectorAll('input').forEach((input) => { input.disabled = !isGuest; });
       taskSelect.disabled = !isGuest || selectedProjectIds().length === 0;
     };
 
     role.addEventListener('change', () => {
       updateVisibility();
       if (role.value === 'guest' && selectedProjectIds().length) {
-        projectSelect.dispatchEvent(new Event('change'));
+        projectContainer.dispatchEvent(new Event('change'));
       }
     });
-    projectSelect.addEventListener('change', async () => {
+    projectContainer.addEventListener('change', async () => {
       taskSelect.innerHTML = '';
       const projectIds = selectedProjectIds();
       taskSelect.disabled = !projectIds.length || role.value !== 'guest';
       if (!projectIds.length) {
-        status.textContent = 'Choisissez un ou plusieurs projets de collaboration pour cet invité.';
+        status.textContent = 'L’administrateur doit attribuer au moins un projet à cet invité.';
         return;
       }
 
@@ -169,9 +172,12 @@
         result = await api('projects', { params: { page: pageNumber, per_page: 100, sort: 'name', direction: 'asc' } });
         projects.push(...(result.data || []));
       }
-      projects.forEach((project) => {
-        projectSelect.add(new Option(`${project.reference} · ${project.name}`, project.id));
-      });
+      projectContainer.innerHTML = projects.length ? projects.map((project) => `
+        <div class="form-check py-1">
+          <input class="form-check-input" type="checkbox" name="project_ids" value="${esc(project.id)}" id="guest-project-${esc(project.id)}">
+          <label class="form-check-label" for="guest-project-${esc(project.id)}">${esc(project.reference)} · ${esc(project.name)}</label>
+        </div>`).join('') : '<div class="text-muted small">Aucun projet disponible.</div>';
+      updateVisibility();
       if (!projects.length) {
         status.textContent = 'Créez un projet avant d’ajouter un invité.';
       }
@@ -188,6 +194,11 @@
       html: userFields(null),
       onOpen: (form) => setupGuestAssignment(form),
       onSubmit: async (data, form, handle) => {
+        data.project_ids = Array.from(form.querySelectorAll('[name="project_ids"]:checked')).map((input) => input.value);
+        if (data.role === 'guest' && data.project_ids.length === 0) {
+          toast('Sélectionnez au moins un projet pour cet invité.');
+          return false;
+        }
         const result = await api('users', { method: 'POST', body: data });
         await loadUsers();
         showTemporaryPassword(result.temporary_password, result.user, handle);
