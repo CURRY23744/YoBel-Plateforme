@@ -4,6 +4,8 @@
   const { $, api, esc, L, fmtDate, fmtDateTime, ago, fullName, fail, ready, activitySubject, activityAction } = App;
   let charts = [];
 
+  const isNarrow = () => window.matchMedia('(max-width: 575.98px)').matches;
+
   function renderKpis(data, stats) {
     const cards = [
       ['bi-kanban', 'Projets visibles', stats.total || 0, ''],
@@ -12,7 +14,7 @@
       ['bi-check2-square', 'Tâches prioritaires', (data.my_tasks || []).length, 'amber'],
     ];
     $('#kpis').innerHTML = cards.map(([icon, label, value, tone]) => `<div class="col-6 col-xl-3"><div class="card h-100"><div class="card-body">
-      <div class="kpi"><div class="ico ${tone}"><i class="bi ${icon}"></i></div><div><div class="num">${esc(value)}</div><div class="lbl">${esc(label)}</div></div></div>
+      <div class="kpi"><div class="ico ${tone}"><i class="bi ${icon}"></i></div><div class="min-w-0"><div class="num">${esc(value)}</div><div class="lbl">${esc(label)}</div></div></div>
     </div></div></div>`).join('');
   }
 
@@ -23,13 +25,26 @@
       canvas.parentElement.innerHTML = '<div class="empty py-5"><i class="bi bi-bar-chart"></i>Aucune donnée à afficher.</div>';
       return;
     }
+    const narrow = isNarrow();
     charts.push(new Chart(canvas, {
       type,
       data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0, hoverOffset: 4 }] },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom' } },
+        layout: { padding: narrow ? 4 : 8 },
+        ...(type === 'doughnut' ? { cutout: narrow ? '58%' : '65%' } : {}),
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              usePointStyle: true,
+              boxWidth: narrow ? 8 : 10,
+              padding: narrow ? 10 : 14,
+              font: { size: narrow ? 11 : 12 },
+            },
+          },
+        },
         ...(type === 'bar' ? { scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } : {}),
       },
     }));
@@ -66,30 +81,32 @@
 
     renderList('myTasks', data.my_tasks || [], (task) => `<a class="list-line text-decoration-none" href="${task.project_id ? `/projects/${encodeURIComponent(task.project_id)}` : '/tasks'}">
       <i class="bi bi-check2-square text-primary"></i><div class="flex-grow-1 min-w-0"><div class="fw-semibold text-truncate">${esc(task.title)}</div><div class="small text-muted">${esc(L.task[task.status] || task.status)}</div></div>
-      <span class="badge-soft bp-${esc(task.priority)}">${esc(L.priority[task.priority] || task.priority)}</span>${task.due_date ? `<span class="small text-muted">${esc(fmtDate(task.due_date))}</span>` : ''}
+      <div class="list-meta"><span class="badge-soft bp-${esc(task.priority)}">${esc(L.priority[task.priority] || task.priority)}</span>${task.due_date ? `<span class="small text-muted text-nowrap">${esc(fmtDate(task.due_date))}</span>` : ''}</div>
     </a>`, 'Aucune tâche à suivre.', 'bi-check2-square');
 
     renderList('events', data.upcoming_events || [], (event) => `<a class="list-line text-decoration-none" href="/agenda">
       <i class="bi bi-calendar-event text-primary"></i><div class="flex-grow-1 min-w-0"><div class="fw-semibold text-truncate">${esc(event.title)}</div><div class="small text-muted">${esc(App.L.eventType[event.type] || event.type)}</div></div>
-      <span class="small text-nowrap">${esc(fmtDateTime(event.starts_at))}</span>
+      <div class="list-meta"><span class="small text-nowrap">${esc(fmtDateTime(event.starts_at))}</span></div>
     </a>`, 'Aucun événement à venir.', 'bi-calendar2');
 
     renderList('milestones', data.upcoming_milestones || [], (milestone) => `<a class="list-line text-decoration-none" href="/projects/${encodeURIComponent(milestone.project_id)}">
-      <span class="milestone-dot"></span><div class="flex-grow-1 min-w-0"><div class="fw-semibold text-truncate">${esc(milestone.title)}</div><div class="small text-muted">Jalon du projet</div></div><span class="small text-nowrap">${esc(fmtDate(milestone.due_date))}</span>
+      <span class="milestone-dot"></span><div class="flex-grow-1 min-w-0"><div class="fw-semibold text-truncate">${esc(milestone.title)}</div><div class="small text-muted">Jalon du projet</div></div>
+      <div class="list-meta"><span class="small text-nowrap">${esc(fmtDate(milestone.due_date))}</span></div>
     </a>`, 'Aucun jalon prévu dans les 30 prochains jours.', 'bi-flag');
 
     renderList('overdue', data.overdue_projects || [], (project) => `<a class="list-line text-decoration-none" href="/projects/${encodeURIComponent(project.id)}">
       <i class="bi bi-exclamation-circle text-danger"></i><div class="flex-grow-1 min-w-0"><div class="fw-semibold text-truncate">${esc(project.reference)} · ${esc(project.name)}</div><div class="small text-muted">${esc(L.status[project.status] || project.status)}</div></div>
-      <span class="small text-danger">${esc(fmtDate(project.planned_end_date))}</span>
+      <div class="list-meta"><span class="small text-danger text-nowrap">${esc(fmtDate(project.planned_end_date))}</span></div>
     </a>`, 'Aucun projet en retard.', 'bi-check-circle');
 
     if (user.role === 'admin') {
       $('#adminRow').classList.remove('d-none');
       renderList('activity', data.recent_activity || [], (entry) => `<div class="list-line">
-        <i class="bi bi-clock-history text-muted"></i><div class="flex-grow-1 min-w-0"><div class="fw-semibold text-truncate">${esc(entry.user?.name || 'Système')} · ${esc(activityAction(entry.action, true))}</div><div class="small text-muted text-truncate">${esc(activitySubject(entry))}</div></div><span class="small text-muted">${esc(ago(entry.created_at))}</span>
+        <i class="bi bi-clock-history text-muted"></i><div class="flex-grow-1 min-w-0"><div class="fw-semibold text-truncate">${esc(entry.user?.name || 'Système')} · ${esc(activityAction(entry.action, true))}</div><div class="small text-muted text-truncate">${esc(activitySubject(entry))}</div></div>
+        <div class="list-meta"><span class="small text-muted text-nowrap">${esc(ago(entry.created_at))}</span></div>
       </div>`, 'Aucune activité récente.', 'bi-clock-history');
       renderList('latestUsers', data.latest_users || [], (person) => `<div class="list-line">
-        ${App.avatar(person, 'sm')}<div class="flex-grow-1"><div class="fw-semibold">${esc(fullName(person))}</div><div class="small text-muted">${esc(L.role[person.role] || person.role)}</div></div>
+        ${App.avatar(person, 'sm')}<div class="flex-grow-1 min-w-0"><div class="fw-semibold text-truncate">${esc(fullName(person))}</div><div class="small text-muted text-truncate">${esc(L.role[person.role] || person.role)}</div></div>
       </div>`, 'Aucun compte récent.', 'bi-people');
     }
   }

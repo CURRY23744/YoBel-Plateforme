@@ -11,6 +11,157 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="{{ asset('css/app.css') }}?v={{ filemtime(public_path('css/app.css')) }}" rel="stylesheet">
+
+    {{-- Ajustements responsive globaux (chargés après app.css) --}}
+    <style>
+        /* Les enfants d'un conteneur flex peuvent rétrécir : évite que la page déborde en largeur */
+        .main-wrap,
+        .main-wrap > .content,
+        .min-w-0 {
+            min-width: 0;
+        }
+
+        html,
+        body {
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+
+        /* Lignes de liste du tableau de bord : bloc "méta" (badge, date) */
+        .list-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        /* Menu des notifications */
+        .notif-menu {
+            width: 360px;
+            max-width: 92vw;
+        }
+
+        #notifList {
+            max-height: min(360px, 60vh);
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
+
+        /* ------------------------ Tablette et mobile ------------------------ */
+        @media (max-width: 991.98px) {
+            /* Menu latéral : largeur adaptée, défilable, hauteur réelle du viewport mobile */
+            .sidebar.offcanvas-lg {
+                width: min(300px, 85vw);
+                max-height: 100dvh;
+                overflow-y: auto;
+                overscroll-behavior: contain;
+            }
+
+            .main-wrap .topbar {
+                gap: 0.5rem;
+            }
+
+            .main-wrap .topbar .btn-icon {
+                min-width: 42px;
+                min-height: 42px;
+            }
+
+            .main-wrap .topbar .search {
+                flex: 1 1 auto;
+                min-width: 0;
+                max-width: none;
+            }
+        }
+
+        /* ------------------------------ Mobile ------------------------------ */
+        @media (max-width: 575.98px) {
+            .main-wrap .content {
+                padding-left: 0.85rem;
+                padding-right: 0.85rem;
+                padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+            }
+
+            /* 16px minimum : empêche le zoom automatique d'iOS au focus d'un champ */
+            .form-control,
+            .form-select,
+            .form-control-sm,
+            .form-select-sm,
+            textarea,
+            input {
+                font-size: 16px;
+            }
+
+            /* Menu des notifications : pleine largeur, sous la barre du haut */
+            #notifBtn + .dropdown-menu {
+                position: fixed !important;
+                top: calc(env(safe-area-inset-top, 0px) + 4rem) !important;
+                left: 0.5rem !important;
+                right: 0.5rem !important;
+                width: auto !important;
+                max-width: none !important;
+                transform: none !important;
+                inset-block-end: auto !important;
+            }
+
+            /* Notifications toast : pleine largeur en haut de l'écran */
+            #toasts {
+                left: 0;
+                right: 0;
+                max-width: 100vw;
+            }
+
+            #toasts .toast {
+                width: 100%;
+                max-width: 100%;
+            }
+
+            /* Boîtes de dialogue : petites marges et défilement interne */
+            .modal-dialog {
+                margin: 0.5rem;
+            }
+
+            .modal-dialog-scrollable .modal-content {
+                max-height: calc(100dvh - 1rem);
+            }
+
+            /* Lignes de liste : texte sur la 1re ligne, badge/date en dessous */
+            .list-line {
+                flex-wrap: wrap;
+                row-gap: 0.25rem;
+            }
+
+            .list-line > .min-w-0 {
+                flex: 1 1 calc(100% - 2.5rem);
+            }
+
+            .list-line .list-meta {
+                flex: 0 0 100%;
+                padding-left: 1.75rem;
+            }
+
+            /* Indicateurs : pictogramme et chiffre plus compacts */
+            .kpi {
+                gap: 0.6rem;
+            }
+
+            .kpi .ico {
+                flex-shrink: 0;
+                width: 38px;
+                height: 38px;
+            }
+
+            .kpi .num {
+                font-size: clamp(1.25rem, 5.5vw, 1.6rem);
+                line-height: 1.1;
+            }
+
+            .kpi .lbl {
+                font-size: 0.78rem;
+            }
+        }
+    </style>
+
     @stack('styles')
 </head>
 <body class="has-watermark" data-nav="@yield('nav')" data-page-roles="@yield('page-roles')">
@@ -35,7 +186,7 @@
             <div class="nav-section">Compte</div>
             <a class="nav-link" data-nav="profile" href="/profile"><i class="bi bi-person"></i> Mon profil</a>
             <a class="nav-link" data-nav="notifications" href="/notifications"><i class="bi bi-bell"></i> Notifications</a>
-            <a class="nav-link" data-nav="settings" href="/settings"><i class="bi bi-bell"></i> Préférences</a>
+            <a class="nav-link" data-nav="settings" href="/settings"><i class="bi bi-sliders"></i> Préférences</a>
 
             <div class="nav-section" data-roles="admin,project_manager,member,guest">Collaboration</div>
             <a class="nav-link" data-nav="space" data-roles="admin,project_manager,member" href="/space"><i class="bi bi-chat-square-text"></i> Espace général</a>
@@ -57,27 +208,27 @@
 
             <form class="search position-relative" action="/search" method="get" role="search">
                 <i class="bi bi-search"></i>
-                <input class="form-control" type="search" name="q" minlength="2" placeholder="Rechercher un projet, un fichier, une tâche…" aria-label="Recherche">
+                <input class="form-control" type="search" name="q" minlength="2" placeholder="Rechercher…" aria-label="Rechercher un projet, un fichier, une tâche">
             </form>
 
-            <div class="ms-auto d-flex align-items-center gap-2">
+            <div class="ms-auto d-flex align-items-center gap-2 flex-shrink-0">
                 <div class="dropdown">
                     <button class="btn btn-light-soft btn-icon position-relative" id="notifBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-label="Notifications">
                         <i class="bi bi-bell"></i>
                         <span id="notifBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">0</span>
                     </button>
-                    <div class="dropdown-menu dropdown-menu-end p-0" style="width: 360px; max-width: 92vw;">
-                        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                    <div class="dropdown-menu dropdown-menu-end p-0 notif-menu">
+                        <div class="d-flex justify-content-between align-items-center gap-2 px-3 py-2 border-bottom">
                             <strong>Notifications</strong>
-                            <button class="btn btn-link btn-sm p-0" id="notifReadAll">Tout marquer comme lu</button>
+                            <button class="btn btn-link btn-sm p-0 text-end" id="notifReadAll">Tout marquer comme lu</button>
                         </div>
-                        <div id="notifList" style="max-height: 360px; overflow-y: auto;"><div class="empty py-4">Chargement…</div></div>
+                        <div id="notifList"><div class="empty py-4">Chargement…</div></div>
                         <a href="/notifications" class="d-block text-center py-2 border-top small">Voir toutes les notifications</a>
                     </div>
                 </div>
 
                 <div class="dropdown">
-                    <button class="btn p-0 d-flex align-items-center gap-2 border-0" data-bs-toggle="dropdown" id="userMenuBtn">
+                    <button class="btn p-0 d-flex align-items-center gap-2 border-0" data-bs-toggle="dropdown" id="userMenuBtn" aria-label="Menu du compte">
                         <span class="avatar" id="userAvatar">··</span>
                         <span class="text-start d-none d-md-block lh-sm">
                             <span class="d-block fw-semibold" id="userName">…</span>
