@@ -21,10 +21,14 @@
             min-width: 0;
         }
 
-        html,
+        /* Pas d'overflow-x: hidden sur html/body : ça casse le menu latéral "sticky".
+           "clip" bloque le débordement sans créer de zone de défilement. */
         body {
             max-width: 100%;
-            overflow-x: hidden;
+        }
+
+        .main-wrap > .content {
+            overflow-x: clip;
         }
 
         /* Lignes de liste du tableau de bord : bloc "méta" (badge, date) */

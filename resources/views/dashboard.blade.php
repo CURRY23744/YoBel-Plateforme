@@ -166,7 +166,7 @@
         color: var(--bs-primary);
         text-decoration: none;
         padding: 0.2rem 0.55rem;
-        margin-right: -0.55rem;
+        margin: -0.4rem -0.55rem -0.4rem 0;
         border-radius: 6px;
         transition: background-color 0.15s ease;
     }
@@ -258,8 +258,10 @@
     /* États vides : lisibles et centrés */
     :is(#myTasks, #events, #milestones, #overdue, #activity, #latestUsers) > :is(.text-muted, .empty, .empty-state, p):only-child {
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 0.5rem;
         min-height: 120px;
         text-align: center;
         font-size: 0.875rem;
@@ -351,6 +353,11 @@
         }
 
         /* Boutons d'action : pleine largeur, faciles à toucher */
+        /* En colonne, le flex-basis de 14rem devenait une hauteur : on l'annule */
+        .dashboard-header > div:first-child {
+            flex: 0 0 auto;
+        }
+
         #headActions {
             width: 100%;
         }
@@ -405,10 +412,12 @@
 
     /* Très petits écrans (iPhone SE, petits Android ≤ 360px) :
        les indicateurs passent en une colonne pour rester lisibles */
-    @media (max-width: 359.98px) {
-        #kpis > [class*="col-"] {
-            flex: 0 0 100%;
-            max-width: 100%;
+    @media (max-width: 399.98px) {
+        /* Grille 2x2 : pictogramme au-dessus du chiffre, bien plus compact que 4 cartes empilées */
+        #kpis .card .kpi {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
         }
 
         .dashboard-card-header a {
